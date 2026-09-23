@@ -1,0 +1,159 @@
+# Initial tree, rendered by entrypoint.sh on first start.
+dn: {{BASE_DN}}
+objectClass: dcObject
+objectClass: organization
+objectClass: crcDistrict
+dc: {{DC}}
+o: Oblastní spolek ČČK
+crcDistrictId: {{DISTRICT_ID}}
+
+dn: ou=units,{{BASE_DN}}
+objectClass: organizationalUnit
+ou: units
+
+dn: ou=external,{{BASE_DN}}
+objectClass: organizationalUnit
+objectClass: crcUnit
+ou: external
+crcUnitId: external
+displayName: Externí uživatelé
+
+dn: cn=readers-basic,ou=external,{{BASE_DN}}
+objectClass: crcGroup
+cn: readers-basic
+
+dn: cn=readers-contact,ou=external,{{BASE_DN}}
+objectClass: crcGroup
+cn: readers-contact
+
+dn: cn=readers-extended,ou=external,{{BASE_DN}}
+objectClass: crcGroup
+cn: readers-extended
+
+dn: ou=grants,{{BASE_DN}}
+objectClass: organizationalUnit
+ou: grants
+
+dn: ou=apps,{{BASE_DN}}
+objectClass: organizationalUnit
+ou: apps
+
+dn: ou=medcover,ou=apps,{{BASE_DN}}
+objectClass: organizationalUnit
+ou: medcover
+description: MedCover
+
+dn: ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+objectClass: organizationalUnit
+ou: roles
+
+dn: cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+objectClass: crcGroup
+cn: admin
+description: Admin
+member: uid={{ADMIN_ID}},ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+
+dn: cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+objectClass: crcGroup
+cn: coordinator
+description: Coordinator
+
+dn: cn=member,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+objectClass: crcGroup
+cn: member
+description: Member
+
+dn: cn=viewer,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+objectClass: crcGroup
+cn: viewer
+description: Viewer
+
+dn: cn=debriefing-manager,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+objectClass: crcGroup
+cn: debriefing-manager
+description: Debriefing Manager
+
+dn: ou=qualifications,ou=medcover,ou=apps,{{BASE_DN}}
+objectClass: organizationalUnit
+ou: qualifications
+
+dn: ou=memberbase,ou=apps,{{BASE_DN}}
+objectClass: organizationalUnit
+ou: memberbase
+description: MemberBase
+
+dn: ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}
+objectClass: organizationalUnit
+ou: roles
+
+dn: cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}
+objectClass: crcGroup
+cn: admin
+description: Admin
+member: uid={{ADMIN_ID}},ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+
+dn: cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}
+objectClass: crcGroup
+cn: district-coordinator
+description: District Coordinator
+
+dn: ou=services,{{BASE_DN}}
+objectClass: organizationalUnit
+ou: services
+
+dn: cn=keycloak,ou=services,{{BASE_DN}}
+objectClass: applicationProcess
+objectClass: simpleSecurityObject
+cn: keycloak
+userPassword: {{KEYCLOAK_PW}}
+
+dn: cn=medcover-sync,ou=services,{{BASE_DN}}
+objectClass: applicationProcess
+objectClass: simpleSecurityObject
+cn: medcover-sync
+userPassword: {{SYNC_PW}}
+
+# MemberBase acts as the logged-in person (proxied authorization), but only
+# for people, never for services or the configuration.
+dn: cn=memberbase,ou=services,{{BASE_DN}}
+objectClass: applicationProcess
+objectClass: simpleSecurityObject
+cn: memberbase
+userPassword: {{MEMBERBASE_PW}}
+authzTo: dn.regex:^uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$
+
+dn: ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+objectClass: organizationalUnit
+objectClass: crcUnit
+ou: {{UNIT_SLUG}}
+crcUnitId: {{UNIT_ID}}
+displayName: {{UNIT_NAME}}
+
+dn: cn=members,ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+objectClass: crcGroup
+cn: members
+member: uid={{ADMIN_ID}},ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+
+dn: cn=readers-basic,ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+objectClass: crcGroup
+cn: readers-basic
+
+dn: cn=readers-contact,ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+objectClass: crcGroup
+cn: readers-contact
+
+dn: cn=readers-extended,ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+objectClass: crcGroup
+cn: readers-extended
+
+dn: uid={{ADMIN_ID}},ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+objectClass: inetOrgPerson
+objectClass: crcMember
+uid: {{ADMIN_ID}}
+crcMemberId: {{ADMIN_ID}}
+cn: {{ADMIN_NAME}}
+sn: {{ADMIN_NAME}}
+mail: {{ADMIN_EMAIL}}
+crcMemberStatus: active
+crcMemberKind: member
+{{ADMIN_PASSWORD_LINE}}

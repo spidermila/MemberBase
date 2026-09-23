@@ -1,0 +1,791 @@
+{
+  "realm": "crc",
+  "enabled": true,
+  "displayName": "Český červený kříž",
+  "loginTheme": "crc",
+  "accountTheme": "keycloak.v3",
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "cs"
+  ],
+  "defaultLocale": "cs",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "editUsernameAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "sslRequired": "external",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "maxDeltaTimeSeconds": 43200,
+  "passwordPolicy": "length(10) and notUsername and notEmail and maxLength(128)",
+  "actionTokenGeneratedByAdminLifespan": 259200,
+  "actionTokenGeneratedByUserLifespan": 1800,
+  "ssoSessionIdleTimeout": 28800,
+  "ssoSessionMaxLifespan": 86400,
+  "eventsEnabled": true,
+  "eventsExpiration": 7776000,
+  "adminEventsEnabled": true,
+  "webAuthnPolicyPasswordlessPasskeysEnabled": true,
+  "webAuthnPolicyPasswordlessRpEntityName": "Evidence členů",
+  "webAuthnPolicyRpEntityName": "Evidence členů",
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "smtpServer": {
+    "host": "${KC_SMTP_HOST}",
+    "port": "${KC_SMTP_PORT:25}",
+    "from": "${KC_SMTP_FROM}",
+    "fromDisplayName": "Evidence členů",
+    "auth": "${KC_SMTP_AUTH:false}",
+    "user": "${KC_SMTP_USER:}",
+    "password": "${KC_SMTP_PASSWORD:}",
+    "starttls": "${KC_SMTP_STARTTLS:false}"
+  },
+  "roles": {
+    "realm": [
+      {
+        "name": "mfa-required",
+        "description": "Second factor is mandatory (composite of admin roles)"
+      }
+    ],
+    "client": {
+      "memberbase": [
+        {
+          "name": "admin",
+          "composite": true,
+          "composites": {
+            "realm": [
+              "mfa-required"
+            ]
+          }
+        },
+        {
+          "name": "district-coordinator"
+        }
+      ],
+      "medcover": [
+        {
+          "name": "admin",
+          "composite": true,
+          "composites": {
+            "realm": [
+              "mfa-required"
+            ]
+          }
+        },
+        {
+          "name": "coordinator"
+        },
+        {
+          "name": "member"
+        },
+        {
+          "name": "viewer"
+        },
+        {
+          "name": "debriefing-manager"
+        }
+      ]
+    }
+  },
+  "clientScopes": [
+    {
+      "name": "crc-member-id",
+      "description": "crcMemberId of the person (the stable identifier)",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "crc_member_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "crcMemberId",
+            "claim.name": "crc_member_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "false",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "basic",
+      "description": "sub and auth_time",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "config": {
+            "introspection.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "auth_time",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usersessionmodel-note-mapper",
+          "config": {
+            "user.session.note": "AUTH_TIME",
+            "claim.name": "auth_time",
+            "jsonType.label": "long",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "medcover-roles",
+      "description": "MedCover roles only",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "medcover_roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "usermodel.clientRoleMapping.clientId": "medcover",
+            "claim.name": "medcover_roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "basic"
+  ],
+  "defaultOptionalClientScopes": [],
+  "clients": [
+    {
+      "clientId": "memberbase",
+      "name": "Evidence členů",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${MEMBERBASE_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "frontchannelLogout": false,
+      "rootUrl": "${MEMBERBASE_URL}",
+      "baseUrl": "${MEMBERBASE_URL}/",
+      "redirectUris": [
+        "${MEMBERBASE_URL}/auth/callback",
+        "${MEMBERBASE_URL}/",
+        "${MEMBERBASE_EXTRA_REDIRECT_URI:/auth/callback}"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+",
+        "use.refresh.tokens": "false"
+      },
+      "defaultClientScopes": [
+        "basic",
+        "crc-member-id"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "medcover",
+      "name": "MedCover",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${MEDCOVER_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "rootUrl": "${MEDCOVER_URL}",
+      "redirectUris": [
+        "${MEDCOVER_URL}/auth/callback",
+        "${MEDCOVER_EXTRA_REDIRECT_URI:/auth/callback}"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+",
+        "backchannel.logout.url": "${MEDCOVER_URL}/auth/backchannel-logout",
+        "backchannel.logout.session.required": "true",
+        "use.refresh.tokens": "false"
+      },
+      "defaultClientScopes": [
+        "basic",
+        "crc-member-id",
+        "medcover-roles"
+      ],
+      "optionalClientScopes": []
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-memberbase",
+      "enabled": true,
+      "serviceAccountClientId": "memberbase",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "manage-users"
+        ]
+      }
+    }
+  ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"unmanagedAttributePolicy\":\"ADMIN_VIEW\",\"attributes\":[{\"name\":\"username\",\"displayName\":\"E-mail\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"E-mail\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"Jméno\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"Příjmení\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[]},\"multivalued\":false},{\"name\":\"crcMemberId\",\"displayName\":\"crcMemberId\",\"permissions\":{\"view\":[\"admin\"],\"edit\":[]},\"multivalued\":false}],\"groups\":[]}"
+          ]
+        }
+      }
+    ],
+    "org.keycloak.storage.UserStorageProvider": [
+      {
+        "name": "ldap",
+        "providerId": "ldap",
+        "subComponents": {
+          "org.keycloak.storage.ldap.mappers.LDAPStorageMapper": [
+            {
+              "name": "username",
+              "providerId": "user-attribute-ldap-mapper",
+              "config": {
+                "ldap.attribute": [
+                  "mail"
+                ],
+                "user.model.attribute": [
+                  "username"
+                ],
+                "read.only": [
+                  "true"
+                ],
+                "always.read.value.from.ldap": [
+                  "false"
+                ],
+                "is.mandatory.in.ldap": [
+                  "true"
+                ]
+              }
+            },
+            {
+              "name": "email",
+              "providerId": "user-attribute-ldap-mapper",
+              "config": {
+                "ldap.attribute": [
+                  "mail"
+                ],
+                "user.model.attribute": [
+                  "email"
+                ],
+                "read.only": [
+                  "true"
+                ],
+                "always.read.value.from.ldap": [
+                  "true"
+                ],
+                "is.mandatory.in.ldap": [
+                  "true"
+                ]
+              }
+            },
+            {
+              "name": "first name",
+              "providerId": "user-attribute-ldap-mapper",
+              "config": {
+                "ldap.attribute": [
+                  "givenName"
+                ],
+                "user.model.attribute": [
+                  "firstName"
+                ],
+                "read.only": [
+                  "true"
+                ],
+                "always.read.value.from.ldap": [
+                  "true"
+                ],
+                "is.mandatory.in.ldap": [
+                  "false"
+                ]
+              }
+            },
+            {
+              "name": "last name",
+              "providerId": "user-attribute-ldap-mapper",
+              "config": {
+                "ldap.attribute": [
+                  "sn"
+                ],
+                "user.model.attribute": [
+                  "lastName"
+                ],
+                "read.only": [
+                  "true"
+                ],
+                "always.read.value.from.ldap": [
+                  "true"
+                ],
+                "is.mandatory.in.ldap": [
+                  "true"
+                ]
+              }
+            },
+            {
+              "name": "crcMemberId",
+              "providerId": "user-attribute-ldap-mapper",
+              "config": {
+                "ldap.attribute": [
+                  "crcMemberId"
+                ],
+                "user.model.attribute": [
+                  "crcMemberId"
+                ],
+                "read.only": [
+                  "true"
+                ],
+                "always.read.value.from.ldap": [
+                  "true"
+                ],
+                "is.mandatory.in.ldap": [
+                  "true"
+                ]
+              }
+            },
+            {
+              "name": "memberbase roles",
+              "providerId": "role-ldap-mapper",
+              "config": {
+                "roles.dn": [
+                  "ou=roles,ou=memberbase,ou=apps,${LDAP_BASE_DN}"
+                ],
+                "role.name.ldap.attribute": [
+                  "cn"
+                ],
+                "role.object.classes": [
+                  "crcGroup"
+                ],
+                "membership.ldap.attribute": [
+                  "member"
+                ],
+                "membership.attribute.type": [
+                  "DN"
+                ],
+                "membership.user.ldap.attribute": [
+                  "uid"
+                ],
+                "mode": [
+                  "READ_ONLY"
+                ],
+                "user.roles.retrieve.strategy": [
+                  "LOAD_ROLES_BY_MEMBER_ATTRIBUTE"
+                ],
+                "use.realm.roles.mapping": [
+                  "false"
+                ],
+                "client.id": [
+                  "memberbase"
+                ]
+              }
+            },
+            {
+              "name": "medcover roles",
+              "providerId": "role-ldap-mapper",
+              "config": {
+                "roles.dn": [
+                  "ou=roles,ou=medcover,ou=apps,${LDAP_BASE_DN}"
+                ],
+                "role.name.ldap.attribute": [
+                  "cn"
+                ],
+                "role.object.classes": [
+                  "crcGroup"
+                ],
+                "membership.ldap.attribute": [
+                  "member"
+                ],
+                "membership.attribute.type": [
+                  "DN"
+                ],
+                "membership.user.ldap.attribute": [
+                  "uid"
+                ],
+                "mode": [
+                  "READ_ONLY"
+                ],
+                "user.roles.retrieve.strategy": [
+                  "LOAD_ROLES_BY_MEMBER_ATTRIBUTE"
+                ],
+                "use.realm.roles.mapping": [
+                  "false"
+                ],
+                "client.id": [
+                  "medcover"
+                ]
+              }
+            }
+          ]
+        },
+        "config": {
+          "enabled": [
+            "true"
+          ],
+          "priority": [
+            "0"
+          ],
+          "vendor": [
+            "other"
+          ],
+          "connectionUrl": [
+            "${LDAP_URL:ldaps://openldap:1636}"
+          ],
+          "startTls": [
+            "false"
+          ],
+          "useTruststoreSpi": [
+            "always"
+          ],
+          "connectionPooling": [
+            "true"
+          ],
+          "connectionTimeout": [
+            "5000"
+          ],
+          "authType": [
+            "simple"
+          ],
+          "bindDn": [
+            "cn=keycloak,ou=services,${LDAP_BASE_DN}"
+          ],
+          "bindCredential": [
+            "${LDAP_KEYCLOAK_PASSWORD}"
+          ],
+          "usersDn": [
+            "${LDAP_BASE_DN}"
+          ],
+          "searchScope": [
+            "2"
+          ],
+          "userObjectClasses": [
+            "inetOrgPerson, crcMember"
+          ],
+          "usernameLDAPAttribute": [
+            "mail"
+          ],
+          "rdnLDAPAttribute": [
+            "uid"
+          ],
+          "uuidLDAPAttribute": [
+            "crcMemberId"
+          ],
+          "customUserSearchFilter": [
+            "(|(crcMemberStatus=active)(crcMemberStatus=invited))"
+          ],
+          "editMode": [
+            "WRITABLE"
+          ],
+          "importEnabled": [
+            "true"
+          ],
+          "syncRegistrations": [
+            "false"
+          ],
+          "usePasswordModifyExtendedOp": [
+            "true"
+          ],
+          "validatePasswordPolicy": [
+            "true"
+          ],
+          "trustEmail": [
+            "true"
+          ],
+          "pagination": [
+            "false"
+          ],
+          "allowKerberosAuthentication": [
+            "false"
+          ],
+          "fullSyncPeriod": [
+            "-1"
+          ],
+          "changedSyncPeriod": [
+            "-1"
+          ],
+          "cachePolicy": [
+            "NO_CACHE"
+          ]
+        }
+      }
+    ]
+  },
+  "requiredActions": [
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 10,
+      "config": {}
+    },
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 20,
+      "config": {}
+    },
+    {
+      "alias": "webauthn-register",
+      "name": "Webauthn Register",
+      "providerId": "webauthn-register",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
+    },
+    {
+      "alias": "webauthn-register-passwordless",
+      "name": "Webauthn Register Passwordless",
+      "providerId": "webauthn-register-passwordless",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 40,
+      "config": {}
+    },
+    {
+      "alias": "delete_credential",
+      "name": "Delete Credential",
+      "providerId": "delete_credential",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 50,
+      "config": {}
+    },
+    {
+      "alias": "VERIFY_PROFILE",
+      "name": "Verify Profile",
+      "providerId": "VERIFY_PROFILE",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 90,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PROFILE",
+      "name": "Update Profile",
+      "providerId": "UPDATE_PROFILE",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 91,
+      "config": {}
+    },
+    {
+      "alias": "VERIFY_EMAIL",
+      "name": "Verify Email",
+      "providerId": "VERIFY_EMAIL",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 92,
+      "config": {}
+    },
+    {
+      "alias": "TERMS_AND_CONDITIONS",
+      "name": "Terms and Conditions",
+      "providerId": "TERMS_AND_CONDITIONS",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 93,
+      "config": {}
+    }
+  ],
+  "browserFlow": "crc browser",
+  "authenticationFlows": [
+    {
+      "alias": "crc browser",
+      "description": "Cookie, or password/passkey; second factor when the person holds an admin role",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "crc forms",
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "crc forms",
+      "description": "Username and password or passkey, then the conditional second factor",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "crc second factor",
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "crc second factor",
+      "description": "Only for holders of mfa-required (admin roles)",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-user-role",
+          "authenticatorConfig": "mfa-required role",
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "flowAlias": "crc second factor existing",
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        },
+        {
+          "flowAlias": "crc second factor setup",
+          "requirement": "CONDITIONAL",
+          "priority": 30,
+          "autheticatorFlow": true,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "crc second factor existing",
+      "description": "The person already has an authenticator app or a security key",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-user-configured",
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "auth-otp-form",
+          "requirement": "ALTERNATIVE",
+          "priority": 20
+        },
+        {
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "webauthn-authenticator",
+          "requirement": "ALTERNATIVE",
+          "priority": 30
+        }
+      ]
+    },
+    {
+      "alias": "crc second factor setup",
+      "description": "No second factor yet: set up an authenticator app now",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-sub-flow-executed",
+          "authenticatorConfig": "second factor not used",
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "auth-otp-form",
+          "requirement": "REQUIRED",
+          "priority": 20
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "mfa-required role",
+      "config": {
+        "condUserRole": "mfa-required",
+        "negate": "false"
+      }
+    },
+    {
+      "alias": "second factor not used",
+      "config": {
+        "flow_to_check": "crc second factor existing",
+        "check_result": "not-executed"
+      }
+    }
+  ]
+}

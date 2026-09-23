@@ -1,0 +1,25 @@
+/* MedCover colours (Bootstrap "danger" red) on Keycloak's PatternFly 5 login. */
+:root {
+  --pf-t--global--color--brand--default: #dc3545;
+  --pf-t--global--color--brand--hover: #bb2d3b;
+  --pf-t--global--color--brand--clicked: #b02a37;
+  --pf-v5-global--primary-color--100: #dc3545;
+  --pf-v5-global--primary-color--200: #b02a37;
+  --pf-v5-global--link--Color: #dc3545;
+  --pf-v5-global--link--Color--hover: #b02a37;
+}
+.pf-v5-c-button.pf-m-primary { background-color: #dc3545; }
+.pf-v5-c-button.pf-m-primary:hover { background-color: #bb2d3b; }
+.pf-v5-c-login__main-header::before,
+#kc-header-wrapper::before {
+  content: "";
+  display: block;
+  width: 80px;
+  height: 72px;
+  margin: 0 auto 0.5rem;
+  background: url("../img/logo.webp") center / contain no-repeat;
+}
+.pf-v5-c-login { background: #f8f9fa; }
+@media (prefers-color-scheme: dark) {
+  .pf-v5-c-login { background: #212529; }
+}
