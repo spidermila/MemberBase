@@ -1,0 +1,117 @@
+# Access rules of the main database, rendered into config.ldif by
+# entrypoint.sh. Placeholders: {{BASE_DN}}, {{BASE_RE}} (BASE_DN escaped for
+# regexes), {{OWN_BRANCH_CONTACT}}.
+#
+# Evaluation order matters: the first rule whose target matches decides; a
+# clause ending in "by * break" hands the remaining readers to later rules.
+# Services are cn=<name>,ou=services. People live at
+# uid=<crcMemberId>,ou=<branch>,ou=units or uid=<crcMemberId>,ou=external.
+#
+# 0: people who are not active can do nothing, whatever else says.
+olcAccess: to *
+  by set="user/crcMemberStatus & [inactive]" none
+  by set="user/crcMemberStatus & [former]" none
+  by set="user/crcMemberStatus & [invited]" none
+  by * break
+# 1: passwords are set only through Keycloak; everyone else may only bind.
+olcAccess: to attrs=userPassword
+  by dn.exact="cn=keycloak,ou=services,{{BASE_DN}}" =wx
+  by anonymous auth
+  by * none
+# 2: service accounts are invisible; slapd checks MemberBase's authzTo
+# (whom it may act as) with its own identity.
+olcAccess: to dn.subtree="ou=services,{{BASE_DN}}" attrs=authzTo
+  by self auth
+  by * none
+olcAccess: to dn.subtree="ou=services,{{BASE_DN}}"
+  by * none
+# 3: MemberBase Admins change everything, District Coordinators read everything.
+olcAccess: to dn.subtree="{{BASE_DN}}"
+  by group/crcGroup/member.exact="cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" write
+  by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" read
+  by * break
+# 4-6: MemberBase's own account (not proxied): looks up the person logging in,
+# activates invited people, reads app roles, runs the grant-expiry job.
+olcAccess: to dn.regex="^uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
+  attrs=crcMemberStatus,crcStatusChangedAt
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
+  by * break
+olcAccess: to dn.subtree="ou=grants,{{BASE_DN}}"
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
+  by * break
+olcAccess: to dn.regex="^cn=(readers-[a-z]+|members),(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
+  attrs=member
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" read
+  by * break
+olcAccess: to dn.regex="^cn=(readers-[a-z]+|members),(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
+  attrs=entry,objectClass,cn
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" read
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" read
+  by * break
+# 7: people edit their own phone and read their own entry and holdings.
+olcAccess: to dn.regex="^uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
+  attrs=telephoneNumber
+  by self write
+  by * break
+olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
+  by dn.exact,expand="$2" read
+  by * break
+# 9: login and service reads of people. MedCover's sync sees only people
+# holding a MedCover role (and their qualifications).
+olcAccess: to dn.regex="^uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
+  attrs=entry,objectClass,uid,crcMemberId,cn,givenName,sn,mail,crcMemberStatus,crcMemberKind
+  by dn.exact="cn=keycloak,ou=services,{{BASE_DN}}" read
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" read
+  by * break
+olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
+  attrs=entry,objectClass,uid,crcMemberId,cn,mail,telephoneNumber,crcMemberStatus,crcMemberKind,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$2] & ([cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=member,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=viewer,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=debriefing-manager,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member)" read
+  by * break
+# 11-13: visibility levels between people (see the design: basic = name and
+# Místní skupina, contact = + email and phone, extended = + later attributes).
+# Readers groups hold people or a branch's cn=members group; member* expands
+# the nesting.
+olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=entry,objectClass,uid,crcMemberId,cn,givenName,sn,crcMemberStatus,crcMemberKind,crcStatusChangedAt,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil
+  by dn.regex="^uid=[^,]+,ou=$2,ou=units,{{BASE_RE}}$" read
+  by set.expand="[cn=readers-basic,ou=$2,ou=units,{{BASE_DN}}]/member* & user" read
+  by set.expand="[cn=readers-contact,ou=$2,ou=units,{{BASE_DN}}]/member* & user" read
+  by set.expand="[cn=readers-extended,ou=$2,ou=units,{{BASE_DN}}]/member* & user" read
+  by * break
+olcAccess: to dn.regex="^uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=mail,telephoneNumber
+{{OWN_BRANCH_CONTACT}}
+  by set.expand="[cn=readers-contact,ou=$1,ou=units,{{BASE_DN}}]/member* & user" read
+  by set.expand="[cn=readers-extended,ou=$1,ou=units,{{BASE_DN}}]/member* & user" read
+  by * break
+olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?uid=[^,]+,ou=external,{{BASE_RE}}$"
+  attrs=entry,objectClass,uid,crcMemberId,cn,givenName,sn,crcMemberStatus,crcMemberKind,crcStatusChangedAt,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil
+  by set="[cn=readers-basic,ou=external,{{BASE_DN}}]/member* & user" read
+  by set="[cn=readers-contact,ou=external,{{BASE_DN}}]/member* & user" read
+  by set="[cn=readers-extended,ou=external,{{BASE_DN}}]/member* & user" read
+  by * break
+olcAccess: to dn.regex="^uid=[^,]+,ou=external,{{BASE_RE}}$"
+  attrs=mail,telephoneNumber
+  by set="[cn=readers-contact,ou=external,{{BASE_DN}}]/member* & user" read
+  by set="[cn=readers-extended,ou=external,{{BASE_DN}}]/member* & user" read
+  by * break
+# 15: app subtree: MedCover sync reads its own app; everyone reads role and
+# qualification definitions; role membership only via the rules above.
+olcAccess: to dn.subtree="ou=medcover,ou=apps,{{BASE_DN}}"
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" read
+  by * break
+olcAccess: to dn.subtree="ou=apps,{{BASE_DN}}"
+  attrs=member
+  by dn.exact="cn=keycloak,ou=services,{{BASE_DN}}" read
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" read
+  by * none
+olcAccess: to dn.subtree="ou=apps,{{BASE_DN}}"
+  attrs=entry,objectClass,ou,cn,description,crcQualificationId,crcParent,crcCanBeRp
+  by users read
+# 18: containers and Místní skupiny (names) are public to everyone logged in.
+olcAccess: to dn.regex="^(ou=[^,]+,)*{{BASE_RE}}$"
+  attrs=entry,objectClass,ou,dc,o,crcUnitId,displayName,crcDistrictId
+  by users read
+olcAccess: to *
+  by * none

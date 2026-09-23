@@ -1,0 +1,110 @@
+# slapd cn=config, rendered by entrypoint.sh. Placeholders: {{BASE_DN}},
+# {{ROOT}} (the openldap user's ldapi peer credentials: root access is only
+# possible locally inside the container), {{OWN_BRANCH_CONTACT}} (access-rule
+# clause that lets people read contact details of their own Místní skupina,
+# empty when the own-branch default level is "basic").
+dn: cn=config
+objectClass: olcGlobal
+cn: config
+olcArgsFile: /var/run/slapd/slapd.args
+olcPidFile: /var/run/slapd/slapd.pid
+olcTLSCertificateFile: /certs/tls.crt
+olcTLSCertificateKeyFile: /certs/tls.key
+olcTLSCACertificateFile: /certs/ca.crt
+olcTLSProtocolMin: 3.3
+# Simple binds need TLS (ldapi counts as 71, but nobody simple-binds there).
+olcSecurity: simple_bind=64
+olcDisallows: bind_anon
+olcRequires: authc
+olcAuthzPolicy: to
+olcLogLevel: {{LOG_LEVEL}}
+
+dn: cn=module{0},cn=config
+objectClass: olcModuleList
+cn: module{0}
+olcModulePath: /usr/lib/ldap
+olcModuleLoad: back_mdb
+olcModuleLoad: argon2
+olcModuleLoad: accesslog
+olcModuleLoad: refint
+olcModuleLoad: unique
+
+dn: cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: schema
+
+include: file:///etc/ldap/schema/core.ldif
+include: file:///etc/ldap/schema/cosine.ldif
+include: file:///etc/ldap/schema/inetorgperson.ldif
+include: file:///etc/ldap/memberbase/crc-schema.ldif
+
+dn: olcDatabase={-1}frontend,cn=config
+objectClass: olcDatabaseConfig
+objectClass: olcFrontendConfig
+olcDatabase: {-1}frontend
+olcPasswordHash: {ARGON2}
+olcSizeLimit: 5000
+olcAccess: {0}to * by dn.exact="{{ROOT}}" manage by * break
+olcAccess: {1}to dn.base="" by * read
+olcAccess: {2}to dn.base="cn=Subschema" by users read
+
+dn: olcDatabase={0}config,cn=config
+objectClass: olcDatabaseConfig
+olcDatabase: {0}config
+olcRootDN: {{ROOT}}
+olcAccess: {0}to * by dn.exact="{{ROOT}}" manage by * none
+
+# Change log. Written only by slapd; MemberBase Admins may read it.
+dn: olcDatabase={1}mdb,cn=config
+objectClass: olcDatabaseConfig
+objectClass: olcMdbConfig
+olcDatabase: {1}mdb
+olcSuffix: cn=accesslog
+olcDbDirectory: /var/lib/ldap/accesslog
+olcRootDN: {{ROOT}}
+olcDbMaxSize: 1073741824
+olcDbIndex: objectClass,reqStart,reqDN,reqAuthzID,reqResult eq
+olcAccess: {0}to * by set="[cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member & user" read by * none
+
+dn: olcDatabase={2}mdb,cn=config
+objectClass: olcDatabaseConfig
+objectClass: olcMdbConfig
+olcDatabase: {2}mdb
+olcSuffix: {{BASE_DN}}
+olcDbDirectory: /var/lib/ldap/data
+olcRootDN: {{ROOT}}
+olcDbMaxSize: 1073741824
+olcDbIndex: objectClass,member,entryCSN,entryUUID eq
+olcDbIndex: crcMemberId,crcUnitId,crcQualificationId,crcHoldingId,crcGrantId eq
+olcDbIndex: crcQualificationRef,crcGrantee,crcGrantTarget,crcMemberStatus,crcMemberKind eq
+olcDbIndex: cn,mail,telephoneNumber eq,sub
+{{ACCESS_RULES}}
+
+dn: olcOverlay={0}accesslog,olcDatabase={2}mdb,cn=config
+objectClass: olcOverlayConfig
+objectClass: olcAccessLogConfig
+olcOverlay: {0}accesslog
+olcAccessLogDB: cn=accesslog
+olcAccessLogOps: writes
+olcAccessLogSuccess: TRUE
+olcAccessLogOld: (objectClass=*)
+olcAccessLogOldAttr: cn
+olcAccessLogOldAttr: crcMemberId
+olcAccessLogPurge: 3650+00:00 01+00:00
+
+dn: olcOverlay={1}refint,olcDatabase={2}mdb,cn=config
+objectClass: olcOverlayConfig
+objectClass: olcRefintConfig
+olcOverlay: {1}refint
+olcRefintAttribute: member
+
+dn: olcOverlay={2}unique,olcDatabase={2}mdb,cn=config
+objectClass: olcOverlayConfig
+objectClass: olcUniqueConfig
+olcOverlay: {2}unique
+olcUniqueURI: ldap:///?crcMemberId?sub
+olcUniqueURI: ldap:///?crcUnitId?sub
+olcUniqueURI: ldap:///?crcQualificationId?sub
+olcUniqueURI: ldap:///?crcHoldingId?sub
+olcUniqueURI: ldap:///?crcGrantId?sub
+olcUniqueURI: ldap:///?mail?sub

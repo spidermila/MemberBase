@@ -1,0 +1,62 @@
+# MemberBase schema. OID arc 2.25.<uuid> (ITU-T X.667): self-assigned from a
+# random UUID, so no IANA Private Enterprise Number is needed.
+# Attributes: <arc>.1.N, object classes: <arc>.2.N. Never renumber.
+dn: cn=crc,cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: crc
+olcObjectIdentifier: crcArc 2.25.211386951077017535280819817315302412932
+olcObjectIdentifier: crcAttr crcArc:1
+olcObjectIdentifier: crcClass crcArc:2
+olcAttributeTypes: ( crcAttr:1 NAME 'crcMemberId' DESC 'Stable person identifier (UUID)'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:2 NAME 'crcMemberStatus' DESC 'invited | active | inactive | former'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:3 NAME 'crcMemberKind' DESC 'member | external'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:4 NAME 'crcStatusChangedAt'
+  EQUALITY generalizedTimeMatch ORDERING generalizedTimeOrderingMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:5 NAME 'crcUnitId' DESC 'Stable Místní skupina identifier (UUID)'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:6 NAME 'crcDistrictId' DESC 'Deployment identifier (UUID)'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:7 NAME 'crcQualificationId' DESC 'Stable qualification identifier (UUID)'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:8 NAME 'crcParent' DESC 'crcQualificationId of a parent qualification'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+olcAttributeTypes: ( crcAttr:9 NAME 'crcCanBeRp' DESC 'MedCover: holder can be the responsible person'
+  EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.7 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:10 NAME 'crcHoldingId'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:11 NAME 'crcQualificationRef' DESC 'crcQualificationId of the held qualification'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:12 NAME 'crcValidFrom'
+  EQUALITY generalizedTimeMatch ORDERING generalizedTimeOrderingMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:13 NAME 'crcValidUntil'
+  EQUALITY generalizedTimeMatch ORDERING generalizedTimeOrderingMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:14 NAME 'crcGrantId'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:15 NAME 'crcGrantee' DESC 'crcMemberId or crcUnitId receiving the grant'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:16 NAME 'crcGrantTarget' DESC 'DN of the readers group the grant fills'
+  EQUALITY distinguishedNameMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.12 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:17 NAME 'crcExpiresAt'
+  EQUALITY generalizedTimeMatch ORDERING generalizedTimeOrderingMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:18 NAME 'crcApprovedBy' DESC 'crcMemberId of the approver'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcObjectClasses: ( crcClass:1 NAME 'crcMember' AUXILIARY
+  MUST ( crcMemberId $ crcMemberStatus $ crcMemberKind ) MAY crcStatusChangedAt )
+olcObjectClasses: ( crcClass:2 NAME 'crcUnit' AUXILIARY MUST crcUnitId MAY displayName )
+olcObjectClasses: ( crcClass:3 NAME 'crcDistrict' AUXILIARY MUST crcDistrictId )
+olcObjectClasses: ( crcClass:4 NAME 'crcQualification' STRUCTURAL
+  MUST ( crcQualificationId $ cn ) MAY ( description $ crcParent ) )
+olcObjectClasses: ( crcClass:5 NAME 'crcMedCoverQualification' AUXILIARY MAY crcCanBeRp )
+olcObjectClasses: ( crcClass:6 NAME 'crcHolding' STRUCTURAL
+  MUST ( crcHoldingId $ crcQualificationRef ) MAY ( crcValidFrom $ crcValidUntil ) )
+olcObjectClasses: ( crcClass:7 NAME 'crcGrant' STRUCTURAL
+  MUST ( crcGrantId $ crcGrantee $ crcGrantTarget ) MAY ( crcExpiresAt $ crcApprovedBy $ description ) )
+olcObjectClasses: ( crcClass:8 NAME 'crcGroup' DESC 'Group that may be empty'
+  STRUCTURAL MUST cn MAY ( member $ description ) )
