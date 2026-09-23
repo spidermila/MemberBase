@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Změny ve verzích – Evidence členů{% endblock %}
+{% block content %}
+<h2>Změny ve verzích</h2>
+<div class="card mb-3">
+  <div class="card-header fw-semibold">Chystané změny</div>
+  <div class="card-body">
+    <h6>✦ Přidáno</h6>
+    <ul>
+      <li>První verze Evidence členů: přihlášení jedním účtem přes Keycloak (heslo, přístupový klíč, ověřovací aplikace).</li>
+      <li>„Členové“ – seznam s hledáním a filtry podle místní skupiny, stavu a role; každý vidí jen to, co mu dovolují pravidla sdílení.</li>
+      <li>Vytvoření člena nebo externího uživatele, úprava jména, e-mailu a telefonu, přesun do jiné místní skupiny.</li>
+      <li>„Pozvánky“ – pozvání e-mailem, opětovné odeslání a zrušení.</li>
+      <li>Aktivace, deaktivace, archivace a obnovení osob (bez mazání).</li>
+      <li>Přiřazování rolí MedCoveru a Evidence členů, i hromadně.</li>
+      <li>„Místní skupiny“, „Kvalifikace – MedCover“, „Sdílení údajů“ a „Historie změn“.</li>
+      <li>Reset dvoufázového ověření správcem.</li>
+      <li>„Můj profil“ – úprava telefonu, změna hesla a nastavení dvoufázového ověření.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

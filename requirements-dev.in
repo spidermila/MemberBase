@@ -1,0 +1,11 @@
+# MemberBase dev/test dependencies
+-r requirements.in
+pytest
+pytest-cov
+responses
+flake8
+black
+isort
+mypy
+types-requests
+pre-commit

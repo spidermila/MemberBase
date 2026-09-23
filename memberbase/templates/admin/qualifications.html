@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Kvalifikace – Evidence členů{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Kvalifikace – MedCover</h2>
+  <a href="{{ url_for('admin.qualification') }}" class="btn btn-danger btn-sm">+ Nová kvalifikace</a>
+</div>
+<p class="text-body-secondary">Kvalifikace používané v MedCoveru. Kvalifikace jiných aplikací se sem nemíchají.</p>
+<div class="table-responsive">
+  <table class="table align-middle">
+    <thead class="table-light"><tr><th>Název</th><th>Nadřazené</th><th>Může být ZO</th><th>Držitelé</th></tr></thead>
+    <tbody>
+    {% for q in quals %}
+      <tr>
+        <td><a href="{{ url_for('admin.qualification', qual_id=q.id) }}">{{ q.name }}</a>
+          {% if q.description %}<div class="small text-body-secondary">{{ q.description }}</div>{% endif %}</td>
+        <td>{% for p in q.parents %}{{ names.get(p, '?') }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        <td>{{ 'ano' if q.can_be_rp else 'ne' }}</td>
+        <td>{{ counts[q.id] }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="text-body-secondary">Zatím žádné kvalifikace.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

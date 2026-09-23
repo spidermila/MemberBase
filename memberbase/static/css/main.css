@@ -1,0 +1,8 @@
+/* MemberBase – same red as MedCover's navbar (Bootstrap danger). */
+.navbar-brand img { border-radius: 4px; }
+.maxw-340 { max-width: 340px; }
+.maxw-200 { max-width: 200px; }
+.col-check { width: 2rem; }
+.small-list { font-size: 0.875rem; margin: 0; padding-left: 1rem; }
+[data-bs-theme="dark"] .table-light { --bs-table-bg: var(--bs-tertiary-bg); --bs-table-color: var(--bs-body-color); }
+.maxw-form { max-width: 640px; }

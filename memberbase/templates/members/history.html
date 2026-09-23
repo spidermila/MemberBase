@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% from "macros/history.html" import changes_table %}
+{% block title %}Historie změn – {{ person.name }}{% endblock %}
+{% block content %}
+<h2>Historie změn: {{ person.name }}</h2>
+{{ changes_table(changes) }}
+<a href="{{ url_for('members.detail', member_id=person.id) }}" class="btn btn-link px-0">← Zpět na osobu</a>
+{% endblock %}

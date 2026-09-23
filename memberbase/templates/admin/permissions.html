@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Oprávnění rolí – Evidence členů{% endblock %}
+{% block content %}
+<h2>Oprávnění rolí</h2>
+<p class="text-body-secondary">Role přiřazujete tady; co role smí, určuje každá aplikace sama.</p>
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Evidence členů</div>
+      <div class="card-body">
+        {% for role, perms in own.items() %}
+        <h6>{{ role }}</h6>
+        <ul class="small-list mb-3">{% for p in perms %}<li>{{ p }}</li>{% endfor %}</ul>
+        {% endfor %}
+        <h6>Člen (každý aktivní)</h6>
+        <ul class="small-list mb-0"><li>Vlastní profil a svou místní skupinu, jiné podle sdílení</li></ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">MedCover (aktuálně z MedCoveru)</div>
+      <div class="card-body">
+        {% if medcover %}
+          {% for role in medcover.get('roles', []) %}
+          <h6>{{ role.get('name') }}</h6>
+          <ul class="small-list mb-3">{% for p in role.get('permissions', []) %}<li>{{ p }}</li>{% endfor %}</ul>
+          {% endfor %}
+        {% else %}
+          <p class="text-body-secondary mb-0">{{ reason }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

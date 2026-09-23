@@ -1,0 +1,8 @@
+# MemberBase production dependencies
+# Edit this file, then run: scripts/compile_requirements.sh
+Flask
+Flask-WTF
+Authlib
+requests
+python-ldap
+gunicorn

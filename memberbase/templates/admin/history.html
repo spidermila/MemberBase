@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% from "macros/history.html" import changes_table %}
+{% block title %}Historie změn – Evidence členů{% endblock %}
+{% block content %}
+<h2>Historie změn</h2>
+<p class="text-body-secondary">Posledních {{ changes|length }} změn. Záznamy zapisuje adresářový server a nelze je upravit.</p>
+{{ changes_table(changes) }}
+{% endblock %}

@@ -68,7 +68,8 @@ with hashes inside the runtime image).
 
 Environment variables (see `memberbase/config.py`): `SECRET_KEY`,
 `LDAP_URI`, `LDAP_CA_CERT`, `LDAP_BASE_DN`, `LDAP_BIND_PASSWORD`,
-`OIDC_ISSUER` (browser-facing), `KEYCLOAK_INTERNAL_URL`, `OIDC_CLIENT_SECRET`,
+`KEYCLOAK_PUBLIC_URL` (browser-facing; `{scheme}` and `{hostname}` are
+filled from the request, default `{scheme}://{hostname}:8180`), `KEYCLOAK_INTERNAL_URL`, `OIDC_CLIENT_SECRET`,
 `STEP_UP_SECONDS`, `MEDCOVER_ROLES_URL`, `SMTP_*`, `MAIL_FROM`.
 
 The OpenLDAP image initialises itself on first start from

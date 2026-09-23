@@ -1,0 +1,8 @@
+{% macro status_badge(person) -%}
+  {%- set cls = {'active': 'bg-success', 'invited': 'bg-info text-black', 'inactive': 'bg-warning text-black', 'former': 'bg-secondary'} -%}
+  <span class="badge {{ cls.get(person.status, 'bg-secondary') }}">{{ person.status_label }}</span>
+{%- endmacro %}
+
+{% macro csrf() -%}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{%- endmacro %}

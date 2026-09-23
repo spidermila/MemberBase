@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import csrf %}
+{% block title %}Místní skupiny – Evidence členů{% endblock %}
+{% block content %}
+<h2>Místní skupiny</h2>
+<div class="table-responsive">
+  <table class="table align-middle">
+    <thead class="table-light"><tr><th>Název</th><th></th></tr></thead>
+    <tbody>
+    {% for u in units %}
+      <tr>
+        <td>
+          <form method="post" action="{{ url_for('admin.rename_unit', unit_id=u.id) }}" class="input-group input-group-sm maxw-form">
+            {{ csrf() }}
+            <input class="form-control" name="name" value="{{ u.name }}" required maxlength="120" aria-label="Název">
+            <button class="btn btn-outline-secondary">Přejmenovat</button>
+          </form>
+        </td>
+        <td class="text-end"><a href="{{ url_for('members.index', unit=u.id) }}">Členové</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="2" class="text-body-secondary">Zatím žádné místní skupiny.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<form method="post" class="card maxw-form">
+  {{ csrf() }}
+  <div class="card-body">
+    <label class="form-label" for="name">Nová místní skupina</label>
+    <div class="input-group">
+      <input class="form-control" id="name" name="name" required maxlength="120" placeholder="Místní skupina …">
+      <button class="btn btn-danger">Vytvořit</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

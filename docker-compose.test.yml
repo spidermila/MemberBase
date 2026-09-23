@@ -1,0 +1,48 @@
+# Test stack: a throwaway OpenLDAP and the test runner. Keycloak is mocked.
+#   docker compose -f docker-compose.test.yml run --rm tests
+name: memberbase-test
+services:
+  openldap:
+    build: deploy/openldap
+    environment:
+      LDAP_KEYCLOAK_PASSWORD: test-keycloak
+      LDAP_MEDCOVER_SYNC_PASSWORD: test-sync
+      LDAP_MEMBERBASE_PASSWORD: test-memberbase
+      BOOTSTRAP_ADMIN_EMAIL: admin@example.org
+      BOOTSTRAP_ADMIN_NAME: Testovací Správce
+    volumes:
+      - test_certs:/certs
+    tmpfs:
+      - /var/lib/ldap:uid=100,gid=101
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-Q", "-Y", "EXTERNAL", "-H", "ldapi://%2Fvar%2Frun%2Fslapd%2Fldapi/", "-b", "", "-s", "base"]
+      interval: 2s
+      retries: 30
+
+  tests:
+    build:
+      context: .
+      args:
+        REQUIREMENTS: requirements-dev.txt
+    user: "${UID:-1000}"
+    command: ["pytest"]
+    environment:
+      LDAP_URI: ldaps://openldap:1636
+      LDAP_BIND_PASSWORD: test-memberbase
+      SECRET_KEY: test-secret
+      KEYCLOAK_PUBLIC_URL: http://kc.test
+      KEYCLOAK_INTERNAL_URL: http://kc.internal
+      OIDC_CLIENT_SECRET: test-client-secret
+      SESSION_COOKIE_SECURE: "false"
+      COVERAGE_FILE: /tmp/.coverage
+      TEST_SYNC_PASSWORD: test-sync
+      TEST_KEYCLOAK_PASSWORD: test-keycloak
+    volumes:
+      - .:/app
+      - test_certs:/certs:ro
+    depends_on:
+      openldap:
+        condition: service_healthy
+
+volumes:
+  test_certs:
