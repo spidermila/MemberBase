@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import csrf, status_badge %}
+{% block title %}Členové – Evidence členů{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0">{{ 'Archivovaní' if archived else 'Členové' }}</h2>
+  {% if me.can('member.edit') %}
+  <a href="{{ url_for('members.create') }}" class="btn btn-danger btn-sm">+ Nová osoba</a>
+  {% endif %}
+</div>
+
+<form method="get" class="row g-2 mb-3 align-items-end">
+  <div class="col-12 col-md-4">
+    <label class="form-label small" for="q">Hledat</label>
+    <input class="form-control" id="q" name="q" value="{{ q }}" placeholder="Jméno, e-mail nebo telefon">
+  </div>
+  <div class="col-6 col-md-3">
+    <label class="form-label small" for="unit">Místní skupina</label>
+    <select class="form-select" id="unit" name="unit">
+      <option value="">Všechny</option>
+      {% for u in units %}<option value="{{ u.id }}" {{ 'selected' if unit and unit.id == u.id }}>{{ u.name }}</option>{% endfor %}
+    </select>
+  </div>
+  {% if can_see_roles %}
+  <div class="col-6 col-md-3">
+    <label class="form-label small" for="role">Role</label>
+    <select class="form-select" id="role" name="role">
+      <option value="">Všechny</option>
+      {% for r in roles %}<option value="{{ r.key }}" {{ 'selected' if role_filter == r.key }}>{{ apps[r.app] }}: {{ r.label }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% if archived %}<input type="hidden" name="archived" value="1">{% endif %}
+  <div class="col-auto"><button class="btn btn-outline-secondary">Filtrovat</button></div>
+  <div class="col-auto ms-auto">
+    <a class="btn btn-sm {{ 'btn-secondary' if archived else 'btn-outline-secondary' }}"
+       href="{{ url_for('members.index', archived=None if archived else '1') }}">{{ 'Zobrazit současné' if archived else 'Archivovaní' }}</a>
+  </div>
+</form>
+
+{% set batch = me.can('role.assign') and not archived %}
+{% if batch %}
+<form method="post" action="{{ url_for('members.batch') }}">
+  {{ csrf() }}
+  <div id="batchToolbar" class="mb-3 p-2 border rounded flex-wrap align-items-center gap-2 d-none">
+    <span id="selCount" class="me-2 fw-semibold small">0 vybráno</span>
+    <select name="role" class="form-select form-select-sm maxw-340" required>
+      <option value="" disabled selected>— Vyberte roli —</option>
+      {% for r in roles %}<option value="{{ r.key }}">{{ apps[r.app] }}: {{ r.label }}</option>{% endfor %}
+    </select>
+    <button name="action" value="add" class="btn btn-sm btn-success">+ Přidat roli</button>
+    <button name="action" value="remove" class="btn btn-sm btn-outline-danger">− Odebrat roli</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="clearSel">Zrušit výběr</button>
+  </div>
+{% endif %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        {% if batch %}<th class="col-check"><input class="form-check-input" type="checkbox" id="selectAll" aria-label="Vybrat vše"></th>{% endif %}
+        <th>Jméno</th><th>Místní skupina</th><th class="d-none d-md-table-cell">E-mail</th>
+        <th class="d-none d-md-table-cell">Telefon</th><th>Stav</th>
+        {% if can_see_roles %}<th class="d-none d-lg-table-cell">Role</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in people %}
+      <tr>
+        {% if batch %}<td><input class="form-check-input" type="checkbox" name="member_ids" value="{{ p.id }}" aria-label="Vybrat {{ p.name }}"></td>{% endif %}
+        <td><a href="{{ url_for('members.detail', member_id=p.id) }}">{{ p.name }}</a></td>
+        <td>{{ p.unit.name if p.unit else '' }}</td>
+        <td class="d-none d-md-table-cell">{{ p.email }}</td>
+        <td class="d-none d-md-table-cell">{{ p.phone }}</td>
+        <td>{{ status_badge(p) }}</td>
+        {% if can_see_roles %}
+        <td class="d-none d-lg-table-cell small">{% for r in roles if r.key in p.roles %}{{ apps[r.app] }}: {{ r.label }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        {% endif %}
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-body-secondary">Nikoho jsme nenašli.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if batch %}</form>{% endif %}
+<p class="small text-body-secondary">Celkem {{ people|length }}. Vidíte jen osoby, jejichž údaje vám pravidla sdílení zpřístupňují.</p>
+{% endblock %}

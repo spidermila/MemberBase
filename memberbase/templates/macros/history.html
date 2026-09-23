@@ -1,0 +1,20 @@
+{% macro changes_table(changes) -%}
+<div class="table-responsive">
+  <table class="table table-sm align-top">
+    <thead class="table-light"><tr><th>Kdy</th><th>Kdo</th><th>Co</th><th>Čeho se týká</th><th>Podrobnosti</th></tr></thead>
+    <tbody>
+    {% for c in changes %}
+      <tr>
+        <td class="text-nowrap">{{ c.when.strftime('%d. %m. %Y %H:%M') }}</td>
+        <td>{{ c.actor }}</td>
+        <td>{{ c.action }}</td>
+        <td>{{ c.target }}</td>
+        <td><ul class="small-list">{% for line in c.details %}<li>{{ line }}</li>{% endfor %}</ul></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="text-body-secondary">Žádné změny.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{%- endmacro %}

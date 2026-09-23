@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import csrf, status_badge %}
+{% block title %}Můj profil – Evidence členů{% endblock %}
+{% block content %}
+<h2>Můj profil</h2>
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Jméno</dt><dd class="col-sm-8">{{ person.name }}</dd>
+          <dt class="col-sm-4">E-mail</dt><dd class="col-sm-8">{{ person.email }}</dd>
+          <dt class="col-sm-4">Místní skupina</dt><dd class="col-sm-8">{{ person.unit.name if person.unit else '' }}</dd>
+          <dt class="col-sm-4">Stav</dt><dd class="col-sm-8">{{ status_badge(person) }}</dd>
+          <dt class="col-sm-4">Role</dt>
+          <dd class="col-sm-8">{% for r in roles %}{{ apps[r.app] }}: {{ r.label }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</dd>
+          <dt class="col-sm-4">Kvalifikace</dt><dd class="col-sm-8">{{ held|join(', ') or '—' }}</dd>
+        </dl>
+        <p class="small text-body-secondary mt-3 mb-0">Jméno a e-mail mění správce oblastního spolku.</p>
+      </div>
+    </div>
+    <form method="post" class="card mt-3">
+      {{ csrf() }}
+      <input type="hidden" name="csn" value="{{ person.csn }}">
+      <div class="card-body">
+        <label class="form-label" for="phone">Telefon</label>
+        <div class="input-group maxw-340">
+          <input class="form-control" id="phone" name="phone" value="{{ person.phone }}" inputmode="tel">
+          <button class="btn btn-danger">Uložit</button>
+        </div>
+      </div>
+    </form>
+  </div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Zabezpečení účtu</div>
+      <div class="list-group list-group-flush">
+        <a class="list-group-item list-group-item-action" href="{{ url_for('auth.login', kc_action='UPDATE_PASSWORD', next=url_for('main.profile')) }}">Změnit heslo</a>
+        <a class="list-group-item list-group-item-action" href="{{ url_for('auth.login', kc_action='CONFIGURE_TOTP', next=url_for('main.profile')) }}">Nastavit ověřovací aplikaci (Google / Microsoft Authenticator)</a>
+        <a class="list-group-item list-group-item-action" href="{{ url_for('auth.login', kc_action='webauthn-register-passwordless', next=url_for('main.profile')) }}">Přidat přístupový klíč (Touch ID, Windows Hello, telefon)</a>
+        <a class="list-group-item list-group-item-action" href="{{ url_for('auth.login', kc_action='webauthn-register', next=url_for('main.profile')) }}">Přidat bezpečnostní klíč jako druhý faktor</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

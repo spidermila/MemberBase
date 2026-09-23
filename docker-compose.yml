@@ -1,0 +1,105 @@
+# Standalone MemberBase dev stack: OpenLDAP, Keycloak (file database),
+# Mailpit (catches all email, UI on :8025) and MemberBase itself.
+#   cp .env.example .env && docker compose up --build -d
+# MedCover's dev stack runs the same services against its MSSQL container.
+services:
+  openldap:
+    build: deploy/openldap
+    restart: unless-stopped
+    environment:
+      LDAP_KEYCLOAK_PASSWORD: ${LDAP_KEYCLOAK_PASSWORD}
+      LDAP_MEDCOVER_SYNC_PASSWORD: ${LDAP_MEDCOVER_SYNC_PASSWORD}
+      LDAP_MEMBERBASE_PASSWORD: ${LDAP_MEMBERBASE_PASSWORD}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+    volumes:
+      - ldap_data:/var/lib/ldap
+      - ldap_certs:/certs
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-Q", "-Y", "EXTERNAL", "-H", "ldapi://%2Fvar%2Frun%2Fslapd%2Fldapi/", "-b", "", "-s", "base"]
+      interval: 5s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # No fixed host name in dev: Keycloak answers under whatever host the
+      # browser uses. Production sets KC_HOSTNAME instead.
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_LOG_LEVEL: ${KC_LOG_LEVEL:-info}
+      KC_TRUSTSTORE_PATHS: /certs/ca.crt
+      KC_SPI_THEME__STATIC_MAX_AGE: "-1"
+      KC_SPI_THEME__CACHE_THEMES: "false"
+      KC_SPI_THEME__CACHE_TEMPLATES: "false"
+      LDAP_BASE_DN: dc=example,dc=org
+      LDAP_KEYCLOAK_PASSWORD: ${LDAP_KEYCLOAK_PASSWORD}
+      MEMBERBASE_CLIENT_SECRET: ${MEMBERBASE_CLIENT_SECRET}
+      MEDCOVER_CLIENT_SECRET: ${MEDCOVER_CLIENT_SECRET}
+      MEMBERBASE_URL: ${MEMBERBASE_URL}
+      MEDCOVER_URL: ${MEDCOVER_URL}
+      MEMBERBASE_EXTRA_REDIRECT_URI: "*"
+      MEDCOVER_EXTRA_REDIRECT_URI: "*"
+      KC_SMTP_HOST: mailpit
+      KC_SMTP_PORT: "1025"
+      KC_SMTP_FROM: evidence@example.org
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./deploy/keycloak/realm-crc.json:/opt/keycloak/data/import/realm-crc.json:ro
+      - ./deploy/keycloak/themes/crc:/opt/keycloak/themes/crc:ro
+      - ldap_certs:/certs:ro
+    depends_on:
+      openldap:
+        condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+
+  memberbase:
+    build: .
+    restart: unless-stopped
+    command: ["flask", "--app", "memberbase:create_app()", "run", "--host=0.0.0.0", "--debug"]
+    environment: &memberbase-env
+      SECRET_KEY: ${SECRET_KEY}
+      SESSION_COOKIE_SECURE: "false"
+      LDAP_BIND_PASSWORD: ${LDAP_MEMBERBASE_PASSWORD}
+      OIDC_CLIENT_SECRET: ${MEMBERBASE_CLIENT_SECRET}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_STARTTLS: "false"
+      MAIL_FROM: evidence@example.org
+    ports:
+      - "5100:5000"
+    volumes:
+      - .:/app:ro
+      - ldap_certs:/certs:ro
+    depends_on:
+      openldap:
+        condition: service_healthy
+
+  # Grant expiry and members-group repair, every 15 minutes.
+  memberbase-jobs:
+    build: .
+    restart: unless-stopped
+    command: ["sh", "-c", "while true; do flask --app 'memberbase:create_app()' expire-grants; flask --app 'memberbase:create_app()' repair-members; sleep 900; done"]
+    environment: *memberbase-env
+    volumes:
+      - ldap_certs:/certs:ro
+    depends_on:
+      openldap:
+        condition: service_healthy
+
+volumes:
+  ldap_data:
+  ldap_certs:

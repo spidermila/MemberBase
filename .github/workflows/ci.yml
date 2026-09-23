@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Lint and type-check
+        run: |
+          docker compose -f docker-compose.test.yml build -q tests
+          docker compose -f docker-compose.test.yml run --rm --no-deps tests \
+            sh -c "black --check memberbase tests && isort --check memberbase tests && flake8 memberbase tests && mypy memberbase"
+      - name: Tests (100 % line and branch coverage)
+        run: ./scripts/test.sh
+      - name: Keycloak realm is valid JSON
+        run: python3 -m json.tool deploy/keycloak/realm-crc.json > /dev/null

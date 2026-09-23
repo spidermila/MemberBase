@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import csrf %}
+{% block title %}Kvalifikace – Evidence členů{% endblock %}
+{% block content %}
+<h2>{{ qual.name if qual else 'Nová kvalifikace' }}</h2>
+<div class="row g-4">
+  <div class="col-lg-6">
+    <form method="post" class="card">
+      {{ csrf() }}
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label" for="name">Název</label>
+          <input class="form-control" id="name" name="name" value="{{ qual.name if qual else '' }}" required maxlength="120">
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="description">Popis</label>
+          <textarea class="form-control" id="description" name="description" rows="2">{{ qual.description if qual else '' }}</textarea>
+        </div>
+        <div class="mb-3">
+          <span class="form-label d-block">Nadřazené kvalifikace</span>
+          {% for o in others %}
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="parents" value="{{ o.id }}" id="p{{ loop.index }}" {{ 'checked' if qual and o.id in qual.parents }}>
+            <label class="form-check-label" for="p{{ loop.index }}">{{ o.name }}</label>
+          </div>
+          {% else %}<span class="text-body-secondary">—</span>{% endfor %}
+        </div>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" id="can_be_rp" name="can_be_rp" value="1" {{ 'checked' if qual and qual.can_be_rp }}>
+          <label class="form-check-label" for="can_be_rp">Může být zodpovědná osoba</label>
+        </div>
+        <button class="btn btn-danger">Uložit</button>
+        <a href="{{ url_for('admin.qualifications') }}" class="btn btn-outline-secondary">Zpět</a>
+      </div>
+    </form>
+    {% if qual %}
+    <form method="post" action="{{ url_for('admin.delete_qualification', qual_id=qual.id) }}" class="mt-3" data-confirm="Smazat kvalifikaci {{ qual.name }}?">
+      {{ csrf() }}<button class="btn btn-sm btn-outline-danger">Smazat kvalifikaci</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if qual %}
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Držitelé ({{ holders|length }})</div>
+      <ul class="list-group list-group-flush">
+        {% for p in holders %}<li class="list-group-item"><a href="{{ url_for('members.detail', member_id=p.id) }}">{{ p.name }}</a></li>
+        {% else %}<li class="list-group-item text-body-secondary">Nikdo</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

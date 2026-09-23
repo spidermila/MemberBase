@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import csrf, status_badge %}
+{% block title %}{{ person.name }} – Evidence členů{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <h2 class="mb-0 me-2">{{ person.name }}</h2>
+  {{ status_badge(person) }}
+  <span class="text-body-secondary">{{ person.unit.name if person.unit else '' }}</span>
+  {% if me.can('history.view') %}
+  <a class="btn btn-sm btn-outline-secondary ms-auto" href="{{ url_for('members.person_history', member_id=person.id) }}">Historie změn</a>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    {% if me.can('member.edit') %}
+    <form method="post" action="{{ url_for('members.edit', member_id=person.id) }}" class="card">
+      {{ csrf() }}
+      <input type="hidden" name="csn" value="{{ person.csn }}">
+      <div class="card-header">Údaje</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label" for="name">Celé jméno</label>
+          <input class="form-control" id="name" name="name" value="{{ person.name }}" required maxlength="120">
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="email">E-mail</label>
+          <input class="form-control" id="email" name="email" type="email" value="{{ person.email }}" required>
+          <div class="form-text">Změna e-mailu vyžaduje nedávné přihlášení; původní adresa dostane upozornění.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="phone">Telefon</label>
+          <input class="form-control" id="phone" name="phone" value="{{ person.phone }}" inputmode="tel">
+        </div>
+        <button class="btn btn-danger">Uložit</button>
+      </div>
+    </form>
+    {% else %}
+    <div class="card"><div class="card-body">
+      <dl class="row mb-0">
+        <dt class="col-sm-4">E-mail</dt><dd class="col-sm-8">{{ person.email or '—' }}</dd>
+        <dt class="col-sm-4">Telefon</dt><dd class="col-sm-8">{{ person.phone or '—' }}</dd>
+      </dl>
+    </div></div>
+    {% endif %}
+
+    <div class="card mt-3">
+      <div class="card-header">Kvalifikace – MedCover</div>
+      <div class="card-body">
+        {% if me.can('qualification.manage') %}
+        <form method="post" action="{{ url_for('members.qualifications', member_id=person.id) }}">
+          {{ csrf() }}
+          {% for q in quals %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="quals" value="{{ q.id }}" id="q{{ loop.index }}" {{ 'checked' if q.id in held }}>
+            <label class="form-check-label" for="q{{ loop.index }}">{{ q.name }}</label>
+          </div>
+          {% else %}<p class="text-body-secondary mb-2">Zatím nejsou žádné kvalifikace.</p>{% endfor %}
+          {% if quals %}<button class="btn btn-sm btn-danger mt-2">Uložit kvalifikace</button>{% endif %}
+        </form>
+        {% else %}
+        {% for q in quals if q.id in held %}{{ q.name }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    {% if roles is defined %}
+    <form method="post" action="{{ url_for('members.roles', member_id=person.id) }}" class="card">
+      {{ csrf() }}
+      <div class="card-header">Role</div>
+      <div class="card-body">
+        {% for app, label in apps.items() %}
+        <h6 class="mt-1">{{ label }}</h6>
+        {% for r in roles if r.app == app %}
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" name="roles" value="{{ r.key }}" id="r{{ r.app }}{{ loop.index }}" {{ 'checked' if r.key in person.roles }}>
+          <label class="form-check-label" for="r{{ r.app }}{{ loop.index }}">{{ r.label }}</label>
+        </div>
+        {% endfor %}
+        {% endfor %}
+        <div><button class="btn btn-sm btn-danger mt-3">Uložit role</button></div>
+        <div class="form-text">Změna rolí vyžaduje nedávné přihlášení.</div>
+      </div>
+    </form>
+    {% endif %}
+
+    {% if me.can('member.status') or me.can('member.edit') or me.can('mfa.reset') %}
+    <div class="card mt-3">
+      <div class="card-header">Účet</div>
+      <div class="card-body d-flex flex-wrap gap-2">
+        {% if me.can('member.edit') and person.status == 'invited' %}
+        <form method="post" action="{{ url_for('members.invite', member_id=person.id) }}">{{ csrf() }}
+          <button class="btn btn-sm btn-outline-primary">Poslat pozvánku znovu</button></form>
+        {% endif %}
+        {% if me.can('member.status') and person.id != me.person.id %}
+          {% for action, label, cls, confirm in [
+               ('activate', 'Aktivovat', 'btn-outline-success', ''),
+               ('deactivate', 'Deaktivovat', 'btn-outline-warning', 'Deaktivovat a odhlásit ze všech aplikací?'),
+               ('archive', 'Archivovat', 'btn-outline-danger', 'Archivovat? Osoba přijde o všechny role a nebude se moci přihlásit.'),
+               ('restore', 'Obnovit z archivu', 'btn-outline-secondary', '')] %}
+            {% if person.status in status_actions[action][0] %}
+            <form method="post" action="{{ url_for('members.change_status', member_id=person.id, action=action) }}" {% if confirm %}data-confirm="{{ confirm }}"{% endif %}>
+              {{ csrf() }}<input type="hidden" name="csn" value="{{ person.csn }}">
+              <button class="btn btn-sm {{ cls }}">{{ label }}</button>
+            </form>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {% if me.can('mfa.reset') and person.status == 'active' %}
+        <form method="post" action="{{ url_for('members.mfa_reset', member_id=person.id) }}"
+              data-confirm="Resetovat dvoufázové ověření? Ověřte si nejdřív totožnost osoby jinou cestou (telefonem, osobně).">
+          {{ csrf() }}<button class="btn btn-sm btn-outline-danger">Resetovat dvoufázové ověření</button></form>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if units is defined and person.status != 'former' %}
+    <form method="post" action="{{ url_for('members.move', member_id=person.id) }}" class="card mt-3"
+          data-confirm="Přesunout osobu? Změní se, kdo její údaje vidí.">
+      {{ csrf() }}
+      <input type="hidden" name="csn" value="{{ person.csn }}">
+      <div class="card-header">Přesunout do jiné místní skupiny</div>
+      <div class="card-body">
+        <div class="input-group">
+          <select class="form-select" name="unit" required aria-label="Nová místní skupina">
+            <option value="">— Vyberte —</option>
+            {% for u in units %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-outline-danger">Přesunout</button>
+        </div>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+<a href="{{ url_for('members.index') }}" class="btn btn-link mt-3 px-0">← Zpět na seznam</a>
+{% endblock %}

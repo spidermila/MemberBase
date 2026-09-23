@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Nenalezeno – Evidence členů{% endblock %}
+{% block content %}
+<h2>Nenalezeno</h2>
+<p>Hledaný záznam neexistuje, nebo ho nemáte oprávnění vidět.</p>
+<a href="{{ url_for('main.index') }}" class="btn btn-outline-secondary">Zpět na úvod</a>
+{% endblock %}

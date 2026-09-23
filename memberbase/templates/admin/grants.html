@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import csrf %}
+{% block title %}Sdílení údajů – Evidence členů{% endblock %}
+{% block content %}
+<h2>Sdílení údajů</h2>
+<p class="text-body-secondary">Členové vidí svou místní skupinu. Údaje jiné místní skupiny nebo externích uživatelů uvidí jen ten, komu je tady zpřístupníte. Bez data platnosti platí sdílení trvale.</p>
+<div class="table-responsive">
+  <table class="table align-middle">
+    <thead class="table-light"><tr><th>Kdo vidí</th><th>Čí údaje</th><th>Rozsah</th><th>Platnost do</th><th>Poznámka</th><th></th></tr></thead>
+    <tbody>
+    {% for g in grants %}
+      <tr class="{{ 'text-body-secondary' if g.expired }}">
+        <td>{{ names.get(g.grantee, '?') }}</td>
+        <td>{{ unit_names.get(g.target_unit_dn.lower(), '?') }}</td>
+        <td>{{ levels.get(g.level, g.level) }}</td>
+        <td>{{ g.expires_at.strftime('%d. %m. %Y') if g.expires_at else 'trvale' }}</td>
+        <td>{{ g.description }}</td>
+        <td class="text-end">
+          <form method="post" action="{{ url_for('admin.revoke_grant', grant_id=g.id) }}" data-confirm="Zrušit toto sdílení?">
+            {{ csrf() }}<button class="btn btn-sm btn-outline-danger">Zrušit</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="text-body-secondary">Zatím žádná sdílení.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<form method="post" class="card maxw-form">
+  {{ csrf() }}
+  <div class="card-header">Nové sdílení</div>
+  <div class="card-body">
+    <div class="mb-2">
+      <span class="form-label d-block">Kdo uvidí</span>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="grantee_kind" value="person" id="granteeKindPerson" checked>
+        <label class="form-check-label" for="granteeKindPerson">Jedna osoba</label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="grantee_kind" value="unit" id="granteeKindUnit">
+        <label class="form-check-label" for="granteeKindUnit">Celá místní skupina</label>
+      </div>
+    </div>
+    <select class="form-select mb-3" name="grantee_person" id="granteePerson" aria-label="Osoba">
+      <option value="">— Vyberte osobu —</option>
+      {% for p in people %}<option value="{{ p.id }}">{{ p.name }}{% if p.unit %} ({{ p.unit.name }}){% endif %}</option>{% endfor %}
+    </select>
+    <select class="form-select mb-3 d-none" name="grantee_unit" id="granteeUnit" aria-label="Místní skupina">
+      <option value="">— Vyberte místní skupinu —</option>
+      {% for u in units if not u.is_external %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+    </select>
+    <label class="form-label" for="target">Čí údaje</label>
+    <select class="form-select mb-3" name="target" id="target" required>
+      <option value="">— Vyberte —</option>
+      {% for u in units %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+    </select>
+    <label class="form-label" for="level">Rozsah</label>
+    <select class="form-select mb-3" name="level" id="level" required>
+      {% for key, label in levels.items() %}<option value="{{ key }}" {{ 'selected' if key == 'contact' }}>{{ label }}</option>{% endfor %}
+    </select>
+    <label class="form-label" for="expires">Platnost do (nepovinné)</label>
+    <input class="form-control mb-3 maxw-200" type="date" name="expires" id="expires">
+    <label class="form-label" for="description">Poznámka</label>
+    <input class="form-control mb-3" name="description" id="description" maxlength="200" placeholder="Např. společné cvičení">
+    <button class="btn btn-danger">Nastavit sdílení</button>
+  </div>
+</form>
+{% endblock %}
