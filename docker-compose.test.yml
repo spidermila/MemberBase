@@ -35,6 +35,7 @@ services:
       OIDC_CLIENT_SECRET: test-client-secret
       SESSION_COOKIE_SECURE: "false"
       COVERAGE_FILE: /tmp/.coverage
+      MYPY_CACHE_DIR: /tmp/.mypy_cache
       TEST_SYNC_PASSWORD: test-sync
       TEST_KEYCLOAK_PASSWORD: test-keycloak
     volumes:
