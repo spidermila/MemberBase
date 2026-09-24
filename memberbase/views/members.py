@@ -10,6 +10,7 @@ from memberbase.directory import Conflict, StaleEntry
 
 bp = Blueprint("members", __name__, url_prefix="/members")
 
+INVITABLE = {"new", "invited"}
 STALE = "Záznam mezitím změnil někdo jiný. Zkontrolujte údaje a akci opakujte."
 EMAIL_TAKEN = "Tento e-mail už používá jiná osoba."
 KEYCLOAK_FAILED = "Změna je uložena, ale přihlašovací služba neodpověděla: {}. Zkuste to prosím znovu."
@@ -17,8 +18,8 @@ KEYCLOAK_FAILED = "Změna je uložena, ale přihlašovací služba neodpověděl
 # action → (allowed from, new status, flash message)
 STATUS_ACTIONS = {
     "activate": ({"inactive"}, "active", "Osoba je aktivní."),
-    "deactivate": ({"active", "invited"}, "inactive", "Osoba je deaktivována."),
-    "archive": ({"invited", "active", "inactive"}, "former", "Osoba je archivována."),
+    "deactivate": ({"active", "invited", "new"}, "inactive", "Osoba je deaktivována."),
+    "archive": ({"new", "invited", "active", "inactive"}, "former", "Osoba je archivována."),
     "restore": ({"former"}, "inactive", "Osoba je obnovena jako neaktivní."),
 }
 
@@ -40,7 +41,7 @@ def index() -> str:
     units = people.list_units(me().dn, include_external=True)
     unit = next((u for u in units if u.id == request.args.get("unit")), None)
     archived = request.args.get("archived") == "1"
-    statuses = ["former"] if archived else ["invited", "active", "inactive"]
+    statuses = ["former"] if archived else ["new", "invited", "active", "inactive"]
     found = people.search_people(me().dn, request.args.get("q", "").strip(), unit, statuses)
     can_see_roles = me().can("member.view_all")
     roles = people.list_roles(me().dn, with_members=can_see_roles)
@@ -210,11 +211,24 @@ def qualifications(member_id: str) -> Response:
     return _back(person)
 
 
-def _send_invite(person: people.Person) -> None:
+def _invite(person: people.Person) -> str | None:
+    """Email the set-password link; a new person becomes invited first, since
+    Keycloak finds only invited and active people. Returns the error, if any."""
+    was_new = person.status == "new"
+    if was_new:
+        people.set_status(person, "invited", me().dn)
     try:
         keycloak.send_invite(person.email, url_for("main.index", _external=True))
     except keycloak.KeycloakError as exc:
-        flash(f"Pozvánku se nepodařilo odeslat: {exc}.", "danger")
+        if was_new:
+            people.set_status(person, "new", me().dn)
+        return str(exc)
+    return None
+
+
+def _send_invite(person: people.Person) -> None:
+    if error := _invite(person):
+        flash(f"Pozvánku se nepodařilo odeslat: {error}.", "danger")
     else:
         flash(f"Pozvánka odeslána na {person.email}.", "success")
 
@@ -223,8 +237,8 @@ def _send_invite(person: people.Person) -> None:
 @require("member.edit")
 def invite(member_id: str) -> Response:
     person = _person_or_404(member_id)
-    if person.status != "invited":
-        flash("Pozvánku lze poslat jen pozvané osobě.", "warning")
+    if person.status not in INVITABLE:
+        flash("Pozvánku lze poslat jen osobě, která se ještě nepřihlásila.", "warning")
     else:
         _send_invite(person)
     if request.form.get("back") == "invites":
@@ -287,14 +301,33 @@ def batch() -> Response:
 @bp.route("/invites")
 @require("member.edit")
 def invites() -> str:
-    return render_template("members/invites.html", people=people.search_people(me().dn, statuses=["invited"]))
+    return render_template("members/invites.html", people=people.search_people(me().dn, statuses=sorted(INVITABLE)))
+
+
+@bp.route("/invites/send", methods=["POST"])
+@require("member.edit")
+def send_invites() -> Response:
+    # ponytail: one Keycloak round trip per person, synchronous; fine for tens, a job if it reaches hundreds
+    sent, failed = 0, []
+    for member_id in request.form.getlist("member_ids"):
+        person = people.find_person(member_id, me().dn)
+        if person is None or person.status not in INVITABLE:
+            continue
+        if error := _invite(person):
+            failed.append(f"{person.email} ({error})")
+        else:
+            sent += 1
+    flash(f"Odesláno pozvánek: {sent}.", "success" if sent else "warning")
+    if failed:
+        flash("Pozvánku se nepodařilo odeslat: " + ", ".join(failed) + ".", "danger")
+    return redirect(url_for("members.invites"))
 
 
 @bp.route("/<member_id>/cancel-invite", methods=["POST"])
 @require("member.edit")
 def cancel_invite(member_id: str) -> Response:
     person = _person_or_404(member_id)
-    if person.status == "invited":
+    if person.status in INVITABLE:
         people.set_status(person, "former", me().dn)
         flash(f"Pozvánka pro {person.name} je zrušena, osoba je archivována.", "success")
     return redirect(url_for("members.invites"))

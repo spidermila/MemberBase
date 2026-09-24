@@ -9,7 +9,7 @@ olcObjectIdentifier: crcAttr crcArc:1
 olcObjectIdentifier: crcClass crcArc:2
 olcAttributeTypes: ( crcAttr:1 NAME 'crcMemberId' DESC 'Stable person identifier (UUID)'
   EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
-olcAttributeTypes: ( crcAttr:2 NAME 'crcMemberStatus' DESC 'invited | active | inactive | former'
+olcAttributeTypes: ( crcAttr:2 NAME 'crcMemberStatus' DESC 'new | invited | active | inactive | former'
   EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( crcAttr:3 NAME 'crcMemberKind' DESC 'member | external'
   EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )

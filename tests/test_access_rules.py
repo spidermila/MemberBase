@@ -105,7 +105,7 @@ def test_inactive_person_sees_nothing(setup, admin):
 
 def test_non_active_statuses_block_reads(setup, admin):
     alice = setup["alice"]
-    for status in ["invited", "inactive", "former"]:
+    for status in ["new", "invited", "inactive", "former"]:
         people.set_status(alice, status, admin.dn)
         assert level(setup["anna"], alice.dn) == "none", status
     people.set_status(alice, "active", admin.dn)

@@ -14,7 +14,13 @@ import ldap
 from memberbase import directory as d
 from memberbase.directory import Entry, escape_dn_chars, escape_filter_chars
 
-STATUSES = {"invited": "Pozvaný", "active": "Aktivní", "inactive": "Neaktivní", "former": "Archivovaný"}
+STATUSES = {
+    "new": "Nepozvaný",
+    "invited": "Pozvaný",
+    "active": "Aktivní",
+    "inactive": "Neaktivní",
+    "former": "Archivovaný",
+}
 LEVELS = {"basic": "Jméno", "contact": "Jméno a kontakt", "extended": "Rozšířené údaje"}
 APPS = {"medcover": "MedCover", "memberbase": "Evidence členů"}
 EXTERNAL_SLUG = "external"
@@ -237,7 +243,7 @@ def create_person(name: str, email: str, phone: str, unit: Unit, as_dn: str) -> 
             "sn": [surname],
             "mail": [email],
             "telephoneNumber": [phone] if phone else [],
-            "crcMemberStatus": ["invited"],
+            "crcMemberStatus": ["new"],
             "crcMemberKind": ["external" if unit.is_external else "member"],
             "crcStatusChangedAt": [now_ldap()],
         },

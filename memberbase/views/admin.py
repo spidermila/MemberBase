@@ -113,7 +113,7 @@ def delete_qualification(qual_id: str) -> Response:
 @require("grant.manage")
 def grants() -> str | Response:
     units = people.list_units(me().dn, include_external=True)
-    everyone = people.search_people(me().dn, statuses=["invited", "active", "inactive"])
+    everyone = people.search_people(me().dn, statuses=["new", "invited", "active", "inactive"])
     if request.method == "POST":
         form = request.form
         target = next((u for u in units if u.id == form.get("target")), None)

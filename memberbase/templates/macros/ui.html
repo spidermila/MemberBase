@@ -1,5 +1,5 @@
 {% macro status_badge(person) -%}
-  {%- set cls = {'active': 'bg-success', 'invited': 'bg-info text-black', 'inactive': 'bg-warning text-black', 'former': 'bg-secondary'} -%}
+  {%- set cls = {'new': 'bg-light text-black border', 'active': 'bg-success', 'invited': 'bg-info text-black', 'inactive': 'bg-warning text-black', 'former': 'bg-secondary'} -%}
   <span class="badge {{ cls.get(person.status, 'bg-secondary') }}">{{ person.status_label }}</span>
 {%- endmacro %}
 
