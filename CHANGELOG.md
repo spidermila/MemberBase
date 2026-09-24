@@ -12,6 +12,7 @@ All notable changes to MemberBase are documented here. The format follows
 - Jobs: grant expiry and repair of each Místní skupina's members group (`flask expire-grants`, `flask repair-members`). (#1)
 - MemberBase has its own logo (also on the Keycloak login page), favicon and home-screen icon instead of MedCover's. (#1)
 - The „Pozvánky“ page sends invitations to the selected people in one go. (#3)
+- Bulk move of the selected people to another Místní skupina from the member list. (#4)
 
 ### Changed
 - New people start with status `new` („Nepozvaný“) and become `invited` („Pozvaný“) only when an invitation is sent. Keycloak does not see `new` people, so they cannot log in or reset a password, and the access rules deny them everything like other non-active people. (#3)

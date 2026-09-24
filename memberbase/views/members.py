@@ -298,6 +298,31 @@ def batch() -> Response:
     return redirect(url_for("members.index"))
 
 
+@bp.route("/batch-move", methods=["POST"])
+@require("member.move")
+def batch_move() -> Response:
+    ids = request.form.getlist("member_ids")
+    target = people.get_unit(request.form.get("target", ""), me().dn)
+    if not ids or target is None:
+        flash("Vyberte osoby a cílovou místní skupinu.", "warning")
+        return redirect(url_for("members.index"))
+    moved, stale = 0, 0
+    for member_id in ids:
+        person = people.find_person(member_id, me().dn)
+        if person is None or person.unit_dn.lower() == target.dn.lower():
+            continue
+        try:
+            people.move_person(person, target, me().dn, person.csn)
+        except StaleEntry:
+            stale += 1
+        else:
+            moved += 1
+    flash(f"Přesunuto do „{target.name}“: {moved} osob, {len(ids) - moved - stale} beze změny.", "success")
+    if stale:
+        flash(f"{stale} osob mezitím změnil někdo jiný a nebyly přesunuty. Zkontrolujte je a akci opakujte.", "warning")
+    return redirect(url_for("members.index"))
+
+
 @bp.route("/invites")
 @require("member.edit")
 def invites() -> str:
