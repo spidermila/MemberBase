@@ -110,6 +110,25 @@ SESSION_COOKIE_SECURE=true
 The proxy must pass `X-Forwarded-Proto/Host/Port` and should block `/admin`
 on the Keycloak host. Real host names go only into `.env`.
 
+### Real email instead of Mailpit
+
+Two programs send email, and each has its own SMTP settings:
+
+- **Keycloak** (invitations, password resets): the realm's email settings,
+  seeded from `KC_SMTP_*` only when the realm is first imported. On a running
+  realm, change them in the admin console: realm `crc` → *Realm settings* →
+  *Email*, then *Test connection* (sends to the logged-in admin's email).
+- **MemberBase** (notices of an email change and a second-factor reset): the
+  `SMTP_*` and `MAIL_FROM` environment variables. Only STARTTLS (usually port
+  587) is supported, not implicit TLS on 465.
+
+Use the same relay and sender for both; the relay must allow that sender.
+Keep the SMTP login out of every repository: put `SMTP_USER` and
+`SMTP_PASSWORD` in an env file outside the checkout (mode 600), load it with
+`env_file:` from an untracked compose override, set `SMTP_HOST`, `SMTP_PORT`,
+`SMTP_STARTTLS` and `MAIL_FROM` under `environment:` in the same override
+(they override the Mailpit values), and recreate only `memberbase`.
+
 ### Keycloak realm changes
 
 Keycloak imports `deploy/keycloak/realm-crc.json` **only when the realm does
@@ -308,6 +327,25 @@ host opens the database, so:
   directory and in the one app that uses it.
 - Root access to the directory exists only inside the `openldap` container
   over `ldapi:///`; there is no root password.
+
+### SMTP login in production
+
+The SMTP password is stored once, in Azure Key Vault, and reaches both
+programs without being copied into configuration:
+
+- **MemberBase:** a Container Apps secret that references the Key Vault
+  secret (`keyVaultUrl` plus the app's managed identity with the *Key Vault
+  Secrets User* role), passed as `SMTP_PASSWORD` via `secretRef`. The other
+  `SMTP_*` values and `MAIL_FROM` are plain environment variables.
+- **Keycloak:** its file vault. Set `KC_VAULT=file` and `KC_VAULT_DIR`
+  (build options, so part of the image build when it starts with
+  `--optimized`), mount the same Key Vault-backed secret as a secret volume
+  in that directory under the file name `crc_smtp-password` (realm, `_`, key),
+  and enter `${vault.smtp-password}` as the password in the realm's email
+  settings. The Keycloak database then holds only the reference, not the
+  password. Leave `KC_SMTP_PASSWORD` unset.
+- Rotating: update the Key Vault secret, then restart both container apps
+  (a new revision) so they read the new value.
 
 ---
 
