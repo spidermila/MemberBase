@@ -49,6 +49,8 @@ login. All email lands in Mailpit (http://localhost:8025).
 Passkeys need a secure context: use `localhost` (an SSH tunnel is fine) or
 HTTPS. The Keycloak admin console is at http://localhost:8180/admin.
 
+Running together with MedCover, CI, releases and production: see `DEVOPS.md`.
+
 ## Tests
 
 ```bash
@@ -75,7 +77,7 @@ filled from the request, default `{scheme}://{hostname}:8180`), `KEYCLOAK_INTERN
 The OpenLDAP image initialises itself on first start from
 `LDAP_KEYCLOAK_PASSWORD`, `LDAP_MEDCOVER_SYNC_PASSWORD`,
 `LDAP_MEMBERBASE_PASSWORD`, `BOOTSTRAP_ADMIN_EMAIL` (and optional
-`BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_UNIT_NAME`,
+`BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_UNIT_SLUG`, `BOOTSTRAP_UNIT_NAME`,
 `LDAP_BASE_DN`, `LDAP_OWN_BRANCH_LEVEL=contact|basic`). Root access is only
 possible inside the container over `ldapi:///`
 (`ldapsearch -Y EXTERNAL -H ldapi://%2Fvar%2Frun%2Fslapd%2Fldapi/ …`).
