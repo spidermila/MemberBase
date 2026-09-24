@@ -90,9 +90,9 @@
     <div class="card mt-3">
       <div class="card-header">Účet</div>
       <div class="card-body d-flex flex-wrap gap-2">
-        {% if me.can('member.edit') and person.status == 'invited' %}
+        {% if me.can('member.edit') and person.status in ('new', 'invited') %}
         <form method="post" action="{{ url_for('members.invite', member_id=person.id) }}">{{ csrf() }}
-          <button class="btn btn-sm btn-outline-primary">Poslat pozvánku znovu</button></form>
+          <button class="btn btn-sm btn-outline-primary">{{ 'Poslat pozvánku znovu' if person.status == 'invited' else 'Poslat pozvánku' }}</button></form>
         {% endif %}
         {% if me.can('member.status') and person.id != me.person.id %}
           {% for action, label, cls, confirm in [

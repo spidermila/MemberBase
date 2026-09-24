@@ -12,6 +12,7 @@ olcAccess: to *
   by set="user/crcMemberStatus & [inactive]" none
   by set="user/crcMemberStatus & [former]" none
   by set="user/crcMemberStatus & [invited]" none
+  by set="user/crcMemberStatus & [new]" none
   by * break
 # 1: passwords are set only through Keycloak; everyone else may only bind.
 olcAccess: to attrs=userPassword

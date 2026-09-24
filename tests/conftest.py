@@ -41,7 +41,7 @@ class World:
     def person(self, unit: people.Unit, name: str = "Jan Novák", status: str = "active", roles=(), **kw):
         email = kw.get("email") or f"{uuid.uuid4().hex[:10]}@example.org"
         person = people.create_person(name, email, kw.get("phone", "123456789"), unit, self.admin.dn)
-        if status != "invited":
+        if status != "new":
             people.set_status(person, status, self.admin.dn)
         for key in roles:
             role = next(r for r in people.list_roles(self.admin.dn) if r.key == key)

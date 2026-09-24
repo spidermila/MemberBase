@@ -114,6 +114,7 @@ def test_create_external_user_without_invite(client, world, admin):
     client.post("/members/new", data={"name": "Externí Host", "email": email, "unit": "external"})
     person = people.search_people(admin.dn, email)[0]
     assert person.kind == "external" and person.unit.is_external
+    assert (person.status, person.status_label) == ("new", "Nepozvaný")
 
 
 def test_create_reports_invalid_input(client, admin):
@@ -135,12 +136,14 @@ def test_create_rejects_duplicate_email(client, world, admin):
 def test_create_invite_failure_is_reported(client, world, admin, kc):
     kc.get(f"{KC}/admin/realms/crc/users", json=[])
     login(client, admin)
+    email = unique("bezkc")
     resp = client.post(
         "/members/new",
-        data={"name": "Bez Keycloaku", "email": unique("bezkc"), "unit": world.unit().id, "invite": "1"},
+        data={"name": "Bez Keycloaku", "email": email, "unit": world.unit().id, "invite": "1"},
         follow_redirects=True,
     )
     assert "Pozvánku se nepodařilo odeslat: user not found." in text(resp)
+    assert people.search_people(admin.dn, email)[0].status == "new"
 
 
 # ── Detail and edit ──────────────────────────────────────────────────────────
@@ -370,11 +373,52 @@ def test_invites_page_resend_and_cancel(client, world, admin, kc):
     assert people.find_person(person.id, admin.dn).status == "former"
 
 
-def test_invite_only_for_invited(client, world, admin):
+def test_invite_only_before_first_login(client, world, admin):
     person = world.person(world.unit())
     login(client, admin)
     page = text(client.post(f"/members/{person.id}/invite", follow_redirects=True))
-    assert "Pozvánku lze poslat jen pozvané osobě." in page
+    assert "Pozvánku lze poslat jen osobě, která se ještě nepřihlásila." in page
+
+
+def test_invite_new_person(client, world, admin, kc):
+    person = world.person(world.unit(), "Nová Osoba", status="new")
+    kc_user(kc, person.email)
+    kc.put(f"{KC}/admin/realms/crc/users/kc-1/execute-actions-email", json={})
+    login(client, admin)
+    assert "Poslat pozvánku</button>" in text(client.get(f"/members/{person.id}"))
+    page = text(client.post(f"/members/{person.id}/invite", follow_redirects=True))
+    assert f"Pozvánka odeslána na {person.email}." in page
+    assert people.find_person(person.id, admin.dn).status == "invited"
+
+
+def test_send_invites_to_selected(client, world, admin, kc):
+    unit = world.unit()
+    new, invited, failing = (world.person(unit, status=s) for s in ("new", "invited", "invited"))
+    active = world.person(unit)
+    kc_user(kc, new.email, "kc-1")
+    kc_user(kc, invited.email, "kc-2")
+    kc.get(
+        f"{KC}/admin/realms/crc/users",
+        json=[],
+        match=[responses.matchers.query_param_matcher({"email": failing.email, "exact": "true"})],
+    )
+    for kc_id in ("kc-1", "kc-2"):
+        kc.put(f"{KC}/admin/realms/crc/users/{kc_id}/execute-actions-email", json={})
+    login(client, admin)
+    page = text(client.get("/members/invites"))
+    assert new.name in page and "Nepozvaný" in page and active.email not in page
+    ids = [new.id, invited.id, failing.id, active.id, "missing"]
+    page = text(client.post("/members/invites/send", data={"member_ids": ids}, follow_redirects=True))
+    assert "Odesláno pozvánek: 2." in page
+    assert f"Pozvánku se nepodařilo odeslat: {failing.email} (user not found)." in page
+    statuses = [people.find_person(p.id, admin.dn).status for p in (new, invited, failing, active)]
+    assert statuses == ["invited", "invited", "invited", "active"]
+
+
+def test_send_invites_with_nothing_selected(client, admin):
+    login(client, admin)
+    page = text(client.post("/members/invites/send", follow_redirects=True))
+    assert "Odesláno pozvánek: 0." in page
 
 
 def test_mfa_reset(client, world, admin, kc, sent):

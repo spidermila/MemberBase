@@ -1,33 +1,45 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import csrf %}
+{% from "macros/ui.html" import csrf, status_badge %}
 {% block title %}Pozvánky – Evidence členů{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0">Pozvánky</h2>
   <a href="{{ url_for('members.create') }}" class="btn btn-danger btn-sm">+ Pozvat novou osobu</a>
 </div>
-<p class="text-body-secondary">Pozvaní dostanou e-mail s odkazem na nastavení hesla (platí 72 hodin). Při prvním přihlášení se stanou aktivními.</p>
+<p class="text-body-secondary">Osoby, které se ještě nepřihlásily. Pozvánka je e-mail s odkazem na nastavení hesla (platí 72 hodin); nepozvaní se přihlásit nemohou. Při prvním přihlášení se osoba stane aktivní.</p>
+<form method="post" action="{{ url_for('members.send_invites') }}" id="bulkInvite">
+  {{ csrf() }}
+  <div id="batchToolbar" class="mb-3 p-2 border rounded flex-wrap align-items-center gap-2 d-none">
+    <span id="selCount" class="me-2 fw-semibold small">0 vybráno</span>
+    <button class="btn btn-sm btn-primary">Poslat pozvánky vybraným</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="clearSel">Zrušit výběr</button>
+  </div>
+</form>
 <div class="table-responsive">
   <table class="table align-middle">
-    <thead class="table-light"><tr><th>Jméno</th><th>E-mail</th><th>Místní skupina</th><th>Pozván(a)</th><th></th></tr></thead>
+    <thead class="table-light"><tr>
+      <th class="col-check"><input class="form-check-input" type="checkbox" id="selectAll" aria-label="Vybrat vše"></th>
+      <th>Jméno</th><th>E-mail</th><th>Místní skupina</th><th>Stav</th><th></th>
+    </tr></thead>
     <tbody>
     {% for p in people %}
       <tr>
+        <td><input class="form-check-input" type="checkbox" name="member_ids" value="{{ p.id }}" form="bulkInvite" aria-label="Vybrat {{ p.name }}"></td>
         <td><a href="{{ url_for('members.detail', member_id=p.id) }}">{{ p.name }}</a></td>
         <td>{{ p.email }}</td>
         <td>{{ p.unit.name if p.unit else '' }}</td>
-        <td>{{ p.status_changed_at.strftime('%d. %m. %Y') if p.status_changed_at else '' }}</td>
+        <td>{{ status_badge(p) }}{% if p.status == 'invited' and p.status_changed_at %} <span class="small text-body-secondary">{{ p.status_changed_at.strftime('%d. %m. %Y') }}</span>{% endif %}</td>
         <td class="text-end">
           <div class="d-inline-flex gap-1">
             <form method="post" action="{{ url_for('members.invite', member_id=p.id) }}">{{ csrf() }}
-              <input type="hidden" name="back" value="invites"><button class="btn btn-sm btn-outline-primary">Poslat znovu</button></form>
-            <form method="post" action="{{ url_for('members.cancel_invite', member_id=p.id) }}" data-confirm="Zrušit pozvánku pro {{ p.name }}?">{{ csrf() }}
+              <input type="hidden" name="back" value="invites"><button class="btn btn-sm btn-outline-primary">{{ 'Poslat znovu' if p.status == 'invited' else 'Poslat' }}</button></form>
+            <form method="post" action="{{ url_for('members.cancel_invite', member_id=p.id) }}" data-confirm="Zrušit pozvánku pro {{ p.name }}? Osoba bude archivována.">{{ csrf() }}
               <button class="btn btn-sm btn-outline-danger">Zrušit</button></form>
           </div>
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="5" class="text-body-secondary">Žádné nevyřízené pozvánky.</td></tr>
+      <tr><td colspan="6" class="text-body-secondary">Žádné nevyřízené pozvánky.</td></tr>
     {% endfor %}
     </tbody>
   </table>
