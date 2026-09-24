@@ -240,7 +240,7 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "+",
+        "post.logout.redirect.uris": "+##${MEDCOVER_URL}/auth/login",
         "backchannel.logout.url": "${MEDCOVER_URL}/auth/backchannel-logout",
         "backchannel.logout.session.required": "true",
         "use.refresh.tokens": "false"
