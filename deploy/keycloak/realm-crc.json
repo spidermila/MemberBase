@@ -688,7 +688,7 @@
     },
     {
       "alias": "crc second factor",
-      "description": "Only for holders of mfa-required (admin roles)",
+      "description": "Only for holders of mfa-required (admin roles) who did not sign in with a passkey",
       "providerId": "basic-flow",
       "topLevel": false,
       "builtIn": false,
@@ -700,6 +700,14 @@
           "authenticatorConfig": "mfa-required role",
           "requirement": "REQUIRED",
           "priority": 10
+        },
+        {
+          "autheticatorFlow": false,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-credential",
+          "authenticatorConfig": "passkey not used",
+          "requirement": "REQUIRED",
+          "priority": 15
         },
         {
           "flowAlias": "crc second factor existing",
@@ -773,6 +781,13 @@
     }
   ],
   "authenticatorConfig": [
+    {
+      "alias": "passkey not used",
+      "config": {
+        "credentials": "webauthn-passwordless",
+        "included": "false"
+      }
+    },
     {
       "alias": "mfa-required role",
       "config": {
