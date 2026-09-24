@@ -14,10 +14,11 @@
 #kc-header-wrapper::before {
   content: "";
   display: block;
-  width: 80px;
+  width: 122px;
   height: 72px;
   margin: 0 auto 0.5rem;
   background: url("../img/logo.webp") center / contain no-repeat;
+  border-radius: 4px;
 }
 .pf-v5-c-login { background: #f8f9fa; }
 @media (prefers-color-scheme: dark) {
