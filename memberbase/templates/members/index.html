@@ -38,18 +38,29 @@
   </div>
 </form>
 
-{% set batch = me.can('role.assign') and not archived %}
+{% set can_roles = me.can('role.assign') %}
+{% set can_move = me.can('member.move') %}
+{% set batch = (can_roles or can_move) and not archived %}
 {% if batch %}
 <form method="post" action="{{ url_for('members.batch') }}">
   {{ csrf() }}
   <div id="batchToolbar" class="mb-3 p-2 border rounded flex-wrap align-items-center gap-2 d-none">
     <span id="selCount" class="me-2 fw-semibold small">0 vybráno</span>
-    <select name="role" class="form-select form-select-sm maxw-340" required>
+    {% if can_roles %}
+    <select name="role" class="form-select form-select-sm maxw-340" required aria-label="Role">
       <option value="" disabled selected>— Vyberte roli —</option>
       {% for r in roles %}<option value="{{ r.key }}">{{ apps[r.app] }}: {{ r.label }}</option>{% endfor %}
     </select>
     <button name="action" value="add" class="btn btn-sm btn-success">+ Přidat roli</button>
     <button name="action" value="remove" class="btn btn-sm btn-outline-danger">− Odebrat roli</button>
+    {% endif %}
+    {% if can_move %}
+    <select name="target" class="form-select form-select-sm maxw-340" aria-label="Cílová místní skupina">
+      <option value="" selected>— Přesunout do —</option>
+      {% for u in units %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+    </select>
+    <button formaction="{{ url_for('members.batch_move') }}" formnovalidate class="btn btn-sm btn-outline-primary">Přesunout</button>
+    {% endif %}
     <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="clearSel">Zrušit výběr</button>
   </div>
 {% endif %}

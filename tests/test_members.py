@@ -354,6 +354,46 @@ def test_batch_roles(client, world, admin):
     assert "Vyberte osoby, roli a akci." in text(bad)
 
 
+def test_batch_move(client, world, admin):
+    source, target = world.unit(), world.unit()
+    a, b = world.person(source, "Anna Přesunutá"), world.person(source, "Bořek Přesunutý")
+    already = world.person(target)
+    login(client, admin)
+    assert "Přesunout</button>" in text(client.get("/members/"))
+    ids = [a.id, b.id, already.id, "missing"]
+    page = text(
+        client.post("/members/batch-move", data={"member_ids": ids, "target": target.id}, follow_redirects=True)
+    )
+    assert f"Přesunuto do „{target.name}“: 2 osob, 2 beze změny." in page
+    for person in (a, b, already):
+        moved = people.find_person(person.id, admin.dn)
+        assert moved.unit_dn == target.dn
+        assert moved.dn in people.d.get(target.members_dn, ["member"]).all("member")
+
+
+def test_batch_move_reports_concurrent_change(client, world, admin, monkeypatch):
+    person = world.person(world.unit())
+    target = world.unit()
+
+    def stale(*args):
+        raise people.d.StaleEntry()
+
+    monkeypatch.setattr(people, "move_person", stale)
+    login(client, admin)
+    page = text(
+        client.post("/members/batch-move", data={"member_ids": [person.id], "target": target.id}, follow_redirects=True)
+    )
+    assert "0 osob, 0 beze změny." in page and "1 osob mezitím změnil někdo jiný" in page
+
+
+def test_batch_move_needs_people_and_target(client, world, admin):
+    person = world.person(world.unit())
+    login(client, admin)
+    for data in ({"target": world.unit().id}, {"member_ids": [person.id], "target": "nope"}):
+        page = text(client.post("/members/batch-move", data=data, follow_redirects=True))
+        assert "Vyberte osoby a cílovou místní skupinu." in page
+
+
 # ── Invitations, MFA, history ────────────────────────────────────────────────
 
 
