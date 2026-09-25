@@ -7,7 +7,7 @@ from werkzeug.wrappers import Response
 from memberbase import forms, history, keycloak, people
 from memberbase.auth import me, require
 from memberbase.directory import StaleEntry
-from memberbase.permissions import PERMISSION_LABELS, ROLE_LABELS, ROLE_PERMISSIONS
+from memberbase.permissions import CHAIR, CHAIR_UNIT_PERMISSIONS, PERMISSION_LABELS, ROLE_LABELS, ROLE_PERMISSIONS
 
 bp = Blueprint("admin", __name__)
 
@@ -143,7 +143,8 @@ def grants() -> str | Response:
         "admin/grants.html",
         grants=sorted(people.list_grants(me().dn), key=lambda g: people.sort_key(names.get(g.grantee, ""))),
         units=units,
-        unit_names={u.dn.lower(): u.name for u in units},
+        owner_names={u.dn.lower(): u.name for u in units}
+        | {p.dn.lower(): f"{p.name} ({p.unit.name})" for p in people.search_people(me().dn) if p.unit},
         people=everyone,
         names=names,
         levels=people.LEVELS,
@@ -187,9 +188,11 @@ def medcover_roles() -> tuple[dict | None, str]:
 @require("role.assign")
 def permissions() -> str:
     medcover, reason = medcover_roles()
+    own = {ROLE_LABELS[r]: sorted(PERMISSION_LABELS[p] for p in perms) for r, perms in ROLE_PERMISSIONS.items()}
+    own[ROLE_LABELS[CHAIR]] += sorted(f"{PERMISSION_LABELS[p]} (ve své místní skupině)" for p in CHAIR_UNIT_PERMISSIONS)
     return render_template(
         "admin/permissions.html",
-        own={ROLE_LABELS[r]: sorted(PERMISSION_LABELS[p] for p in perms) for r, perms in ROLE_PERMISSIONS.items()},
+        own=own,
         medcover=medcover,
         reason=reason,
     )

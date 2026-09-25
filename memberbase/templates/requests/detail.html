@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import csrf %}
+{% block title %}{{ req.type_label }} – Evidence členů{% endblock %}
+{% block content %}
+<h2>{{ req.type_label }}</h2>
+<div class="card mb-3 maxw-form">
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Stav</dt><dd class="col-sm-8">{{ req.status_label }}</dd>
+      <dt class="col-sm-4">Žadatel</dt><dd class="col-sm-8">{{ req.requested_by_name }}</dd>
+      <dt class="col-sm-4">Podáno</dt><dd class="col-sm-8">{{ req.created_at.strftime('%d. %m. %Y') if req.created_at else '—' }}</dd>
+      {% if req.type == 'move' %}
+      <dt class="col-sm-4">Koho</dt><dd class="col-sm-8">{{ req.move_subject_name }}</dd>
+      <dt class="col-sm-4">Odkud</dt><dd class="col-sm-8">{{ req.move_from.name if req.move_from else '—' }}</dd>
+      <dt class="col-sm-4">Kam</dt><dd class="col-sm-8">{{ req.unit.name }}</dd>
+      {% else %}
+      <dt class="col-sm-4">Čí údaje</dt><dd class="col-sm-8">{{ req.unit.name }}</dd>
+      <dt class="col-sm-4">Rozsah</dt><dd class="col-sm-8">{{ levels.get(req.access_level, req.access_level) }}</dd>
+      <dt class="col-sm-4">Platnost do</dt><dd class="col-sm-8">{{ req.expires_at.strftime('%d. %m. %Y') if req.expires_at else 'trvale' }}</dd>
+      {% endif %}
+      <dt class="col-sm-4">{{ 'Poznámka' if req.type == 'move' else 'Účel' }}</dt><dd class="col-sm-8">{{ req.note or '—' }}</dd>
+      {% if req.decided_at %}
+      <dt class="col-sm-4">Rozhodnuto</dt><dd class="col-sm-8">{{ req.decided_at.strftime('%d. %m. %Y') }}</dd>
+      {% endif %}
+    </dl>
+  </div>
+</div>
+
+{% if req.type == 'access' and not decides %}
+<div class="card mb-3 maxw-form">
+  <div class="card-header">Požadovaná jména</div>
+  <div class="card-body">
+    <p class="mb-2">{{ req.access_names|join(', ') }}</p>
+    {% if granted %}<p class="mb-0">Zpřístupněno: {% for p in granted %}{{ p.name }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if decides %}
+<form method="post" action="{{ url_for('requests.decide', request_id=req.id) }}" class="card maxw-form">
+  {{ csrf() }}
+  <input type="hidden" name="csn" value="{{ req.csn }}">
+  <div class="card-header">Rozhodnutí</div>
+  <div class="card-body">
+    {% if req.type == 'move' %}
+    <p>Po schválení se {{ req.move_subject_name }} přesune do „{{ req.unit.name }}“. Uvidí vaši místní skupinu a vy uvidíte jeho nebo její údaje.</p>
+    {% else %}
+    <p>Ke každému jménu vyberte člena místní skupiny. Kde nikoho nevyberete, přístup nedáte. Žadatel uvidí jen vybrané osoby v rozsahu „{{ levels.get(req.access_level, req.access_level) }}“.</p>
+    {% for name, match, similar in rows %}
+    <div class="mb-3">
+      <label class="form-label fw-semibold" for="subject{{ loop.index0 }}">{{ name }}</label>
+      <input class="form-control form-control-sm mb-1 select-filter" type="search" data-filter="subject{{ loop.index0 }}"
+             placeholder="Hledat v seznamu" aria-label="Hledat v seznamu">
+      <select class="form-select" name="subject_{{ loop.index0 }}" id="subject{{ loop.index0 }}">
+        <option value="">— Nepovolit —</option>
+        {% if similar %}
+        <optgroup label="Podobná jména">
+          {% for p in similar %}<option value="{{ p.id }}" {{ 'selected' if match and match.id == p.id }}>{{ p.name }}{% if p.email %} ({{ p.email }}){% endif %}</option>{% endfor %}
+        </optgroup>
+        {% endif %}
+        <optgroup label="Všichni členové">
+          {% for p in members %}<option value="{{ p.id }}">{{ p.name }}{% if p.email %} ({{ p.email }}){% endif %}</option>{% endfor %}
+        </optgroup>
+      </select>
+      {% if not match %}<div class="form-text">Jméno jsme mezi členy místní skupiny přesně nenašli, vyberte ručně.</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+    <div class="d-flex gap-2">
+      <button name="action" value="approve" class="btn btn-success">Schválit</button>
+      <button name="action" value="reject" class="btn btn-outline-danger" data-confirm="Zamítnout žádost?">Zamítnout</button>
+    </div>
+  </div>
+</form>
+{% endif %}
+<a href="{{ url_for('requests.index') }}" class="btn btn-link mt-3 px-0">← Zpět na žádosti</a>
+{% endblock %}

@@ -5,15 +5,19 @@
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <h2 class="mb-0 me-2">{{ person.name }}</h2>
   {{ status_badge(person) }}
+  {% if is_chair %}<span class="badge bg-danger-subtle text-danger-emphasis border">Předseda MS</span>{% endif %}
   <span class="text-body-secondary">{{ person.unit.name if person.unit else '' }}</span>
   {% if me.can('history.view') %}
   <a class="btn btn-sm btn-outline-secondary ms-auto" href="{{ url_for('members.person_history', member_id=person.id) }}">Historie změn</a>
   {% endif %}
 </div>
 
+{% if protected %}
+<div class="alert alert-secondary">Tuto osobu spravuje jen Admin: má roli s rozšířeným oprávněním nebo je předsedou místní skupiny.</div>
+{% endif %}
 <div class="row g-4">
   <div class="col-lg-6">
-    {% if me.can('member.edit') %}
+    {% if can_edit %}
     <form method="post" action="{{ url_for('members.edit', member_id=person.id) }}" class="card">
       {{ csrf() }}
       <input type="hidden" name="csn" value="{{ person.csn }}">
@@ -47,7 +51,7 @@
     <div class="card mt-3">
       <div class="card-header">Kvalifikace – MedCover</div>
       <div class="card-body">
-        {% if me.can('qualification.manage') %}
+        {% if can_quals %}
         <form method="post" action="{{ url_for('members.qualifications', member_id=person.id) }}">
           {{ csrf() }}
           {% for q in quals %}
@@ -80,21 +84,28 @@
         </div>
         {% endfor %}
         {% endfor %}
+        {% if person.unit and not person.unit.is_external %}
+        <h6 class="mt-1">Místní skupina</h6>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" name="chair" value="1" id="rchair" {{ 'checked' if is_chair }}>
+          <label class="form-check-label" for="rchair">Předseda MS ({{ person.unit.name }})</label>
+        </div>
+        {% endif %}
         <div><button class="btn btn-sm btn-danger mt-3">Uložit role</button></div>
         <div class="form-text">Změna rolí vyžaduje nedávné přihlášení.</div>
       </div>
     </form>
     {% endif %}
 
-    {% if me.can('member.status') or me.can('member.edit') or me.can('mfa.reset') %}
+    {% if can_status or can_edit or me.can('mfa.reset') %}
     <div class="card mt-3">
       <div class="card-header">Účet</div>
       <div class="card-body d-flex flex-wrap gap-2">
-        {% if me.can('member.edit') and person.status in ('new', 'invited') %}
+        {% if can_edit and person.status in ('new', 'invited') %}
         <form method="post" action="{{ url_for('members.invite', member_id=person.id) }}">{{ csrf() }}
           <button class="btn btn-sm btn-outline-primary">{{ 'Poslat pozvánku znovu' if person.status == 'invited' else 'Poslat pozvánku' }}</button></form>
         {% endif %}
-        {% if me.can('member.status') and person.id != me.person.id %}
+        {% if can_status and person.id != me.person.id %}
           {% for action, label, cls, confirm in [
                ('activate', 'Aktivovat', 'btn-outline-success', ''),
                ('deactivate', 'Deaktivovat', 'btn-outline-warning', 'Deaktivovat a odhlásit ze všech aplikací?'),
@@ -136,6 +147,22 @@
           </select>
           <button class="btn btn-outline-danger">Přesunout</button>
         </div>
+      </div>
+    </form>
+    {% endif %}
+
+    {% if request_units is defined and person.status != 'former' %}
+    <form method="post" action="{{ url_for('requests.new_move', member_id=person.id) }}" class="card mt-3">
+      {{ csrf() }}
+      <div class="card-header">Požádat o přesun do jiné místní skupiny</div>
+      <div class="card-body">
+        <p class="small text-body-secondary">O přesunu rozhodne předseda cílové místní skupiny. Po schválení se osoba přesune sama.</p>
+        <select class="form-select mb-2" name="unit" required aria-label="Cílová místní skupina">
+          <option value="">— Vyberte —</option>
+          {% for u in request_units %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+        </select>
+        <input class="form-control mb-2" name="note" maxlength="200" placeholder="Poznámka pro předsedu (nepovinné)" aria-label="Poznámka">
+        <button class="btn btn-outline-danger">Odeslat žádost</button>
       </div>
     </form>
     {% endif %}

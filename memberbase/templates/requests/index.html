@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Žádosti – Evidence členů{% endblock %}
+{% macro table(reqs, empty) %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr><th>Podáno</th><th>Druh</th><th>Týká se</th><th>Místní skupina</th><th class="d-none d-md-table-cell">Žadatel</th><th>Stav</th></tr>
+    </thead>
+    <tbody>
+      {% for r in reqs %}
+      <tr>
+        <td class="text-nowrap"><a href="{{ url_for('requests.detail', request_id=r.id) }}">{{ r.created_at.strftime('%d. %m. %Y') if r.created_at else '—' }}</a></td>
+        <td>{{ r.type_label }}</td>
+        <td>{% if r.type == 'move' %}{{ r.move_subject_name }}{% else %}{{ r.access_names|join(', ') }}{% endif %}</td>
+        <td>{{ r.unit.name }}</td>
+        <td class="d-none d-md-table-cell">{{ r.requested_by_name }}</td>
+        <td>{{ r.status_label }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-body-secondary">{{ empty }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0">Žádosti</h2>
+  {% if me.can('request.create') %}
+  <a href="{{ url_for('requests.new_access') }}" class="btn btn-danger btn-sm">+ Žádost o přístup k údajům</a>
+  {% endif %}
+</div>
+<p class="text-body-secondary">O žádosti rozhoduje předseda místní skupiny, které se týká. O přesun osoby žádáte na její kartě.</p>
+<h5>Čekají na vaše rozhodnutí</h5>
+{{ table(to_decide, 'Nic nečeká.') }}
+<h5>Vaše žádosti</h5>
+{{ table(mine, 'Zatím jste o nic nežádali.') }}
+{% if others %}
+<h5>Ostatní</h5>
+{{ table(others, '') }}
+{% endif %}
+{% endblock %}

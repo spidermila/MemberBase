@@ -22,12 +22,19 @@ UI is Czech („Evidence členů“); code and docs are English.
 - Every read or change a person makes runs **as that person** (LDAP proxied
   authorization, RFC 4370). The directory's access rules decide what they may
   see or change, not the app. MemberBase's own account is used only to look
-  up the person logging in, activate invited people, and run the jobs.
+  up the person logging in, activate invited people, run the jobs, carry out
+  approved requests, and for requests: look up requesters' names, whom to
+  email, and whether a person is privileged.
 - Visibility: people see their own Místní skupina at the `contact` level
   (name, email, phone). Other branches and external users are visible only
   through a grant, i.e. membership of `cn=readers-<level>` of the target
-  branch (a person, or a branch's `cn=members` group). District Coordinators
-  read everything, Admins change everything.
+  branch or of one person (a person, or a branch's `cn=members` group).
+  District Coordinators read everything, Admins change everything, MS Chairs
+  (`cn=chair` of a branch) change the people of their own branch.
+- Requests: moves between branches and access to named people are requested,
+  filed under the deciding branch (`ou=requests`) and decided by its Chairs.
+  MemberBase's own account carries out an approved request, since neither
+  side alone may write it.
 - Change log: slapd's `accesslog` records every change with the real person,
   old and new values; nobody can edit it.
 - Concurrent edits: writes carry an assertion on the `entryCSN` the form was

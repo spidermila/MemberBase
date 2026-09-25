@@ -2,10 +2,11 @@ import time
 import uuid
 
 import pytest
+import responses
 
 from memberbase import create_app
 from memberbase import directory as d
-from memberbase import people
+from memberbase import mail, people
 
 
 @pytest.fixture
@@ -50,6 +51,11 @@ class World:
         assert found is not None
         return found
 
+    def chair(self, unit: people.Unit, name: str = "Petra Předsedkyně", **kw):
+        person = self.person(unit, name, **kw)
+        people.set_chair(person, True, self.admin.dn)
+        return person
+
     def external(self) -> people.Unit:
         unit = people.get_unit("external", self.admin.dn)
         assert unit is not None
@@ -66,3 +72,37 @@ def login(client, person: people.Person, auth_time: float | None = None) -> None
         sess["member_id"] = person.id
         sess["auth_time"] = time.time() if auth_time is None else auth_time
         sess["id_token"] = "id-token"
+
+
+KC = "http://kc.internal"
+TOKEN_URL = f"{KC}/realms/crc/protocol/openid-connect/token"
+
+
+@pytest.fixture
+def kc():
+    with responses.RequestsMock() as rsps:
+        rsps.post(TOKEN_URL, json={"access_token": "svc"})
+        yield rsps
+
+
+@pytest.fixture
+def sent(monkeypatch):
+    mails: list[tuple[str, str]] = []
+    monkeypatch.setattr(mail, "send", lambda to, subject, body: mails.append((to, subject)) or True)
+    return mails
+
+
+def unique(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:8]}@example.org"
+
+
+def text(resp) -> str:
+    return resp.get_data(as_text=True)
+
+
+def kc_user(kc, email: str, kc_id: str = "kc-1") -> None:
+    kc.get(
+        f"{KC}/admin/realms/crc/users",
+        json=[{"id": kc_id}],
+        match=[responses.matchers.query_param_matcher({"email": email, "exact": "true"})],
+    )

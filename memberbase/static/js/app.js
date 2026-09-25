@@ -48,3 +48,43 @@ document.addEventListener("submit", function (event) {
   kinds.forEach(function (k) { k.addEventListener("change", update); });
   update();
 })();
+
+// Access request form: one more name row.
+(function () {
+  var add = document.getElementById("addAccessRow");
+  if (!add) {
+    return;
+  }
+  add.addEventListener("click", function () {
+    var rows = document.querySelectorAll("#accessRows .access-row");
+    var row = rows[rows.length - 1].cloneNode(true);
+    row.querySelector("input").value = "";
+    row.querySelector("select").selectedIndex = 0;
+    document.getElementById("accessRows").appendChild(row);
+    row.querySelector("input").focus();
+  });
+})();
+
+// Filter a long <select> by typing, ignoring case and Czech accents.
+(function () {
+  function plain(text) {
+    // NFD splits "č" into "c" plus an invisible combining mark (U+0300–U+036F).
+    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+  document.querySelectorAll("input.select-filter").forEach(function (input) {
+    var select = document.getElementById(input.dataset.filter);
+    // Enter would submit the decision form, i.e. approve.
+    input.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+      }
+    });
+    input.addEventListener("input", function () {
+      var words = plain(input.value).split(/\s+/).filter(Boolean);
+      Array.prototype.forEach.call(select.options, function (option) {
+        var text = plain(option.text);
+        option.hidden = option.value !== "" && !words.every(function (w) { return text.indexOf(w) !== -1; });
+      });
+    });
+  });
+})();

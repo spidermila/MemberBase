@@ -44,7 +44,7 @@ if [[ ! -f "$CONF/cn=config.ldif" ]]; then
 
     own_branch=""
     if [[ "$LDAP_OWN_BRANCH_LEVEL" == "contact" ]]; then
-        own_branch="  by dn.regex=\"^uid=[^,]+,ou=\$1,ou=units,${BASE_RE}\$\" read"
+        own_branch="  by dn.regex=\"^uid=[^,]+,ou=\$2,ou=units,${BASE_RE}\$\" read"
     fi
     first_rdn=${LDAP_BASE_DN%%,*}
     export R_DC=${first_rdn#dc=}

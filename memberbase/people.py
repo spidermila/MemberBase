@@ -8,6 +8,7 @@ import unicodedata
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 import ldap
 
@@ -24,6 +25,7 @@ STATUSES = {
 LEVELS = {"basic": "Jméno", "contact": "Jméno a kontakt", "extended": "Rozšířené údaje"}
 APPS = {"medcover": "MedCover", "memberbase": "Evidence členů"}
 EXTERNAL_SLUG = "external"
+PRAGUE = ZoneInfo("Europe/Prague")
 
 PERSON_ATTRS = [
     "crcMemberId",
@@ -53,9 +55,16 @@ def now_ldap() -> str:
 
 
 def parse_ldap_time(value: str) -> datetime | None:
-    if not value:
-        return None
-    return datetime.strptime(value[:14], "%Y%m%d%H%M%S").replace(tzinfo=UTC)
+    """GeneralizedTime (UTC) → datetime; minutes and seconds may be missing.
+    A value that does not parse counts as missing: the directory accepts
+    forms this app never writes."""
+    digits = value[:14].rstrip("Z")
+    for fmt in ("%Y%m%d%H%M%S", "%Y%m%d%H%M", "%Y%m%d%H"):
+        try:
+            return datetime.strptime(digits, fmt).replace(tzinfo=UTC)
+        except ValueError:
+            continue
+    return None
 
 
 def split_name(full_name: str) -> tuple[str, str]:
@@ -81,6 +90,14 @@ class Unit:
     @property
     def members_dn(self) -> str:
         return f"cn=members,{self.dn}"
+
+    @property
+    def chair_dn(self) -> str:
+        return f"cn=chair,{self.dn}"
+
+    @property
+    def requests_dn(self) -> str:
+        return f"ou=requests,{self.dn}"
 
     def readers_dn(self, level: str) -> str:
         return f"cn=readers-{level},{self.dn}"
@@ -132,8 +149,9 @@ def create_unit(name: str, as_dn: str) -> Unit:
         {"objectClass": ["organizationalUnit", "crcUnit"], "ou": [slug], "crcUnitId": [unit.id], "displayName": [name]},
         as_dn,
     )
-    for cn in ["members", *(f"readers-{level}" for level in LEVELS)]:
+    for cn in ["members", "chair", *(f"readers-{level}" for level in LEVELS)]:
         d.add(f"cn={cn},{unit.dn}", {"objectClass": ["crcGroup"], "cn": [cn]}, as_dn)
+    d.add(unit.requests_dn, {"objectClass": ["organizationalUnit"], "ou": ["requests"]}, as_dn)
     return unit
 
 
@@ -166,6 +184,10 @@ class Person:
     @property
     def status_label(self) -> str:
         return STATUSES.get(self.status, self.status)
+
+    def readers_dn(self, level: str) -> str:
+        """Readers group of a grant for just this person, created on demand."""
+        return f"cn=readers-{level},{self.dn}"
 
 
 def _person(entry: Entry) -> Person:
@@ -221,6 +243,15 @@ def find_person(member_id: str, as_dn: str | None) -> Person | None:
     filterstr = f"(&(objectClass=crcMember)(crcMemberId={escape_filter_chars(member_id)}))"
     entries = d.search(units_base(), filterstr, PERSON_ATTRS, as_dn=as_dn)
     entries += d.search(external_dn(), filterstr, PERSON_ATTRS, ldap.SCOPE_ONELEVEL, as_dn)
+    return _first_person(entries, as_dn)
+
+
+def person_at(dn: str, as_dn: str | None) -> Person | None:
+    """The person with this DN. Returns None if absent or not visible."""
+    return _first_person(d.search(dn, "(objectClass=crcMember)", PERSON_ATTRS, ldap.SCOPE_BASE, as_dn), as_dn)
+
+
+def _first_person(entries: list[Entry], as_dn: str | None) -> Person | None:
     if not entries:
         return None
     person = _person(entries[0])
@@ -250,7 +281,10 @@ def create_person(name: str, email: str, phone: str, unit: Unit, as_dn: str) -> 
         as_dn,
     )
     if not unit.is_external:
-        d.add_values(unit.members_dn, "member", [dn], as_dn)
+        try:
+            d.add_values(unit.members_dn, "member", [dn], as_dn)
+        except d.Denied:
+            pass  # a Chair: joins at first login or by the members repair
     person = find_person(member_id, as_dn)
     assert person is not None
     return person
@@ -276,26 +310,31 @@ def set_status(person: Person, status: str, as_dn: str | None, csn: str | None =
 
 def activate_invited(person: Person) -> None:
     """First login of an invited person. Runs as the service account; the
-    assertion makes sure only an invited entry is switched to active."""
+    assertion makes sure only an invited entry is switched to active. Also
+    joins the Místní skupina's cn=members (a Chair who added them could not)."""
     d.modify(
         person.dn,
         {"crcMemberStatus": ["active"], "crcStatusChangedAt": [now_ldap()]},
         None,
         assertion="(crcMemberStatus=invited)",
     )
+    if person.unit is not None and not person.unit.is_external:
+        d.add_values(person.unit.members_dn, "member", [person.dn], None)
 
 
-def move_person(person: Person, target: Unit, as_dn: str, csn: str) -> None:
+def move_person(person: Person, target: Unit, as_dn: str | None, csn: str | None) -> None:
     """Move to another Místní skupina (or to/from external users).
 
     The rename runs under the form's entryCSN, so a concurrent edit fails
     cleanly. refint rewrites the person's DN in role and readers groups, but
     asynchronously, so the old branch's cn=members entry is removed before
     the rename (and put back if the rename fails). A failure after the
-    rename is fixed by the nightly members repair.
+    rename is fixed by the nightly members repair. Chairing the old
+    Místní skupina ends with the move.
     """
     old_members = None if person.unit_dn.lower() == external_dn().lower() else f"cn=members,{person.unit_dn}"
     if old_members:
+        d.delete_values(f"cn=chair,{person.unit_dn}", "member", [person.dn], as_dn)
         d.delete_values(old_members, "member", [person.dn], as_dn)
     try:
         new_dn = d.move(person.dn, target.dn, as_dn, csn=csn)
@@ -338,7 +377,9 @@ def list_roles(as_dn: str | None, with_members: bool = False) -> list[Role]:
 
 def roles_of(person_dn: str) -> set[str]:
     """Role keys ("app:name") of a person, read by the service account."""
-    return {r.key for r in list_roles(None, with_members=True) if person_dn.lower() in r.members}
+    filterstr = f"(&(objectClass=crcGroup)(member={escape_filter_chars(person_dn)}))"
+    found = d.search(f"ou=apps,{d.base_dn()}", filterstr, ["cn"])
+    return {f"{e.dn.split(',')[2].removeprefix('ou=')}:{e.first('cn')}" for e in found}
 
 
 def set_roles(person: Person, wanted: set[str], as_dn: str) -> tuple[set[str], set[str]]:
@@ -358,6 +399,37 @@ def toggle_role(person: Person, role: Role, add: bool, as_dn: str) -> None:
 
 def remove_all_roles(person: Person, as_dn: str) -> None:
     set_roles(person, set(), as_dn)
+    unit = person.unit
+    if unit is not None and not unit.is_external and person.dn.lower() in chair_members(unit, as_dn):
+        d.delete_values(unit.chair_dn, "member", [person.dn], as_dn)
+
+
+# Roles whose holders only Admins may edit, change status of, or move (the
+# directory's access rules list the same roles, plus Chairs).
+PRIVILEGED_ROLES = {"memberbase:admin", "memberbase:district-coordinator", "medcover:admin", "medcover:coordinator"}
+
+
+def chairs_of(person_dn: str) -> set[str]:
+    """DNs (lower case) of the Místní skupiny a person chairs, read by the
+    service account."""
+    filterstr = f"(&(objectClass=crcGroup)(cn=chair)(member={escape_filter_chars(person_dn)}))"
+    return {e.parent_dn.lower() for e in d.search(units_base(), filterstr, ["cn"])}
+
+
+def chair_members(unit: Unit, as_dn: str | None) -> set[str]:
+    """DNs (lower case) of the Chairs of a Místní skupina, if visible."""
+    group = d.get(unit.chair_dn, ["member"], as_dn)
+    return {m.lower() for m in group.all("member")} if group else set()
+
+
+def set_chair(person: Person, add: bool, as_dn: str) -> None:
+    """Make a person Chair of their own Místní skupina, or stop."""
+    (d.add_values if add else d.delete_values)(f"cn=chair,{person.unit_dn}", "member", [person.dn], as_dn)
+
+
+def is_privileged(person: Person) -> bool:
+    """Holds a privileged role or chairs a Místní skupina (service account)."""
+    return bool(roles_of(person.dn) & PRIVILEGED_ROLES) or bool(chairs_of(person.dn))
 
 
 # ── Qualifications (MedCover namespace) ──────────────────────────────────────
@@ -472,7 +544,8 @@ class Grant:
         return self.target_dn.split(",", 1)[0].removeprefix("cn=readers-")
 
     @property
-    def target_unit_dn(self) -> str:
+    def target_owner_dn(self) -> str:
+        """The Místní skupina, or the one person, whose data the grant shows."""
         return self.target_dn.split(",", 1)[1]
 
     @property
@@ -512,16 +585,22 @@ def grantee_member_dn(grantee: str, as_dn: str | None) -> str | None:
 
 def create_grant(
     grantee: str,
-    target: Unit,
+    target: Unit | Person,
     level: str,
     expires_at: datetime | None,
     description: str,
     approved_by: str,
-    as_dn: str,
+    as_dn: str | None,
 ) -> None:
+    """Let a person or a Místní skupina see a Místní skupina, or one person."""
     member_dn = grantee_member_dn(grantee, as_dn)
     if member_dn is None:
         raise ValueError(grantee)
+    if isinstance(target, Person):
+        try:
+            d.add(target.readers_dn(level), {"objectClass": ["crcGroup"], "cn": [f"readers-{level}"]}, as_dn)
+        except ldap.ALREADY_EXISTS:
+            pass
     grant_id = new_id()
     d.add(
         f"crcGrantId={grant_id},{grants_base()}",
@@ -563,9 +642,27 @@ def expire_grants() -> int:
 
 def repair_members() -> int:
     """Scheduled job (service account): make every cn=members group equal to
-    the people actually inside the Místní skupina. Returns groups fixed."""
+    the people actually inside the Místní skupina, and take roles and
+    chairing away from archived people (an archiving Chair cannot), and add
+    missing cn=chair and ou=requests. Returns entries fixed."""
     fixed = 0
+    former_filter = "(&(objectClass=crcMember)(crcMemberStatus=former))"
+    former = {e.dn.lower() for e in d.search(units_base(), former_filter, ["cn"])}
+    former |= {e.dn.lower() for e in d.search(external_dn(), former_filter, ["cn"], ldap.SCOPE_ONELEVEL)}
+    groups = {r.dn: r.members for r in list_roles(None, with_members=True)}
+    groups |= {u.chair_dn: chair_members(u, None) for u in list_units(None)}
+    for dn, members in groups.items():
+        if stale := sorted(members & former):
+            d.delete_values(dn, "member", stale, None)
+            fixed += 1
     for unit in list_units(None):
+        # Místní skupiny created before Chairs and requests existed.
+        if d.get(unit.chair_dn, ["cn"]) is None:
+            d.add(unit.chair_dn, {"objectClass": ["crcGroup"], "cn": ["chair"]}, None)
+            fixed += 1
+        if d.get(unit.requests_dn, ["ou"]) is None:
+            d.add(unit.requests_dn, {"objectClass": ["organizationalUnit"], "ou": ["requests"]}, None)
+            fixed += 1
         actual = {e.dn for e in d.search(unit.dn, "(objectClass=crcMember)", ["crcMemberId"], ldap.SCOPE_ONELEVEL)}
         group = d.get(unit.members_dn, ["member"])
         recorded = set(group.all("member")) if group else set()

@@ -147,6 +147,25 @@ def modify(
     _write(_conn().modify_ext_s, dn, mods, as_dn=as_dn, assertion=assertion or csn_assertion(csn))
 
 
+def swap(
+    dn: str,
+    attr: str,
+    old: str,
+    new: str,
+    as_dn: str | None,
+    changes: dict[str, list[str]] | None = None,
+    csn: str | None = None,
+) -> None:
+    """Replace one value of `attr` by another as a delete and an add, so that
+    value-specific access rules apply; `changes` are replaced alongside."""
+    mods: list[tuple[int, str, list[bytes] | None]] = [
+        (ldap.MOD_DELETE, attr, _encode([old])),
+        (ldap.MOD_ADD, attr, _encode([new])),
+    ]
+    mods += [(ldap.MOD_REPLACE, k, _encode(v) or None) for k, v in (changes or {}).items()]
+    _write(_conn().modify_ext_s, dn, mods, as_dn=as_dn, assertion=csn_assertion(csn))
+
+
 def add_values(dn: str, attr: str, values: list[str], as_dn: str | None) -> None:
     try:
         _write(_conn().modify_ext_s, dn, [(ldap.MOD_ADD, attr, _encode(values))], as_dn=as_dn)
@@ -155,9 +174,10 @@ def add_values(dn: str, attr: str, values: list[str], as_dn: str | None) -> None
 
 
 def delete_values(dn: str, attr: str, values: list[str], as_dn: str | None) -> None:
+    """Remove values; absent values, or an absent entry, are no error."""
     try:
         _write(_conn().modify_ext_s, dn, [(ldap.MOD_DELETE, attr, _encode(values))], as_dn=as_dn)
-    except ldap.NO_SUCH_ATTRIBUTE:
+    except ldap.NO_SUCH_ATTRIBUTE, ldap.NO_SUCH_OBJECT:
         pass
 
 

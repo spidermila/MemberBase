@@ -8,7 +8,7 @@ from werkzeug.wrappers import Response
 
 from memberbase import forms, history, keycloak, mail, people
 from memberbase.auth import login_required, me, recent_login, require, step_up
-from memberbase.directory import Conflict, StaleEntry
+from memberbase.directory import Conflict, Denied, StaleEntry
 
 bp = Blueprint("members", __name__, url_prefix="/members")
 
@@ -16,6 +16,7 @@ INVITABLE = {"new", "invited"}
 STALE = "Záznam mezitím změnil někdo jiný. Zkontrolujte údaje a akci opakujte."
 EMAIL_TAKEN = "Tento e-mail už používá jiná osoba."
 KEYCLOAK_FAILED = "Změna je uložena, ale přihlašovací služba neodpověděla: {}. Zkuste to prosím znovu."
+PRIVILEGED = "Tuto osobu smí měnit jen Admin: má roli s rozšířeným oprávněním nebo je předsedou místní skupiny."
 
 # action → (allowed from, new status, flash message)
 STATUS_ACTIONS = {
@@ -35,6 +36,15 @@ def _person_or_404(member_id: str) -> people.Person:
 
 def _back(person: people.Person) -> Response:
     return redirect(url_for("members.detail", member_id=person.id))
+
+
+def _managed_or_403(member_id: str, permission: str) -> people.Person:
+    """The person, if the logged-in person may do `permission` to them: by
+    role anywhere, or as Chair of their Místní skupina."""
+    person = _person_or_404(member_id)
+    if not me().can_in_unit(permission, person.unit_dn):
+        abort(403)
+    return person
 
 
 @bp.route("/")
@@ -67,9 +77,11 @@ def index() -> str:
 
 
 @bp.route("/new", methods=["GET", "POST"])
-@require("member.edit")
+@login_required
 def create() -> str | Response:
-    units = people.list_units(me().dn, include_external=True)
+    units = [u for u in people.list_units(me().dn, include_external=True) if me().can_in_unit("member.edit", u.dn)]
+    if not units:
+        abort(403)
     form = request.form
     if request.method == "POST":
         name, e1 = forms.clean_name(form.get("name", ""))
@@ -96,7 +108,20 @@ def create() -> str | Response:
 @login_required
 def detail(member_id: str) -> str:
     person = _person_or_404(member_id)
-    ctx: dict = {"person": person, "status_actions": STATUS_ACTIONS}
+    unit_dn = person.unit_dn
+    # Chairs are not offered what the directory refuses them (privileged people, themselves).
+    protected = me().is_chair_of(unit_dn) and not me().is_admin and people.is_privileged(person)
+    ctx: dict = {
+        "person": person,
+        "status_actions": STATUS_ACTIONS,
+        "protected": protected,
+        "can_edit": me().can_in_unit("member.edit", unit_dn) and not protected,
+        "can_status": me().can_in_unit("member.status", unit_dn) and not protected,
+        "can_quals": me().can_in_unit("qualification.manage", unit_dn) and not protected,
+        "is_chair": person.unit is not None
+        and not person.unit.is_external
+        and person.dn.lower() in people.chair_members(person.unit, me().dn),
+    }
     if me().can("role.assign"):
         ctx["roles"] = people.list_roles(me().dn, with_members=True)
         person.roles = {r.key for r in ctx["roles"] if person.dn.lower() in r.members}
@@ -104,6 +129,8 @@ def detail(member_id: str) -> str:
     ctx["held"] = set(people.holdings_of(person, me().dn))
     if me().can("member.move"):
         ctx["units"] = [u for u in people.list_units(me().dn, include_external=True) if u.dn != person.unit_dn]
+    elif me().is_chair_of(unit_dn) and not protected:
+        ctx["request_units"] = [u for u in people.list_units(me().dn) if u.dn != person.unit_dn]
     return render_template("members/detail.html", **ctx)
 
 
@@ -117,9 +144,9 @@ def _notify_email_change(person: people.Person, new_email: str) -> None:
 
 
 @bp.route("/<member_id>/edit", methods=["POST"])
-@require("member.edit")
+@login_required
 def edit(member_id: str) -> Response:
-    person = _person_or_404(member_id)
+    person = _managed_or_403(member_id, "member.edit")
     name, e1 = forms.clean_name(request.form.get("name", ""))
     email, e2 = forms.clean_email(request.form.get("email", ""))
     phone, e3 = forms.clean_phone(request.form.get("phone", ""))
@@ -138,6 +165,8 @@ def edit(member_id: str) -> Response:
         flash(STALE, "warning")
     except Conflict:
         flash(EMAIL_TAKEN, "danger")
+    except Denied:
+        flash(PRIVILEGED, "warning")
     else:
         flash("Údaje uloženy.", "success")
         if email_changed:
@@ -146,11 +175,11 @@ def edit(member_id: str) -> Response:
 
 
 @bp.route("/<member_id>/status/<action>", methods=["POST"])
-@require("member.status")
+@login_required
 def change_status(member_id: str, action: str) -> Response:
     if action not in STATUS_ACTIONS:
         abort(404)
-    person = _person_or_404(member_id)
+    person = _managed_or_403(member_id, "member.status")
     allowed, status, message = STATUS_ACTIONS[action]
     if person.status not in allowed:
         flash("Tuto změnu stavu nelze provést.", "warning")
@@ -162,6 +191,9 @@ def change_status(member_id: str, action: str) -> Response:
         people.set_status(person, status, me().dn, request.form.get("csn", ""))
     except StaleEntry:
         flash(STALE, "warning")
+        return _back(person)
+    except Denied:
+        flash(PRIVILEGED, "warning")
         return _back(person)
     if status == "former":
         people.remove_all_roles(person, me().dn)
@@ -200,16 +232,25 @@ def roles(member_id: str) -> Response:
         flash("Archivované osobě nelze přiřadit role.", "warning")
         return _back(person)
     added, removed = people.set_roles(person, set(request.form.getlist("roles")), me().dn)
+    if person.unit is not None and not person.unit.is_external:
+        is_chair = person.dn.lower() in people.chair_members(person.unit, me().dn)
+        if is_chair != bool(request.form.get("chair")):
+            people.set_chair(person, not is_chair, me().dn)
+            (removed if is_chair else added).add("chair")
     flash(f"Role uloženy (přidáno {len(added)}, odebráno {len(removed)}).", "success")
     return _back(person)
 
 
 @bp.route("/<member_id>/qualifications", methods=["POST"])
-@require("qualification.manage")
+@login_required
 def qualifications(member_id: str) -> Response:
-    person = _person_or_404(member_id)
-    added, removed = people.set_holdings(person, set(request.form.getlist("quals")), me().dn)
-    flash(f"Kvalifikace uloženy (přidáno {len(added)}, odebráno {len(removed)}).", "success")
+    person = _managed_or_403(member_id, "qualification.manage")
+    try:
+        added, removed = people.set_holdings(person, set(request.form.getlist("quals")), me().dn)
+    except Denied:
+        flash(PRIVILEGED, "warning")
+    else:
+        flash(f"Kvalifikace uloženy (přidáno {len(added)}, odebráno {len(removed)}).", "success")
     return _back(person)
 
 
@@ -229,16 +270,20 @@ def _invite(person: people.Person) -> str | None:
 
 
 def _send_invite(person: people.Person) -> None:
-    if error := _invite(person):
+    try:
+        error = _invite(person)
+    except Denied:
+        error = PRIVILEGED
+    if error:
         flash(f"Pozvánku se nepodařilo odeslat: {error}.", "danger")
     else:
         flash(f"Pozvánka odeslána na {person.email}.", "success")
 
 
 @bp.route("/<member_id>/invite", methods=["POST"])
-@require("member.edit")
+@login_required
 def invite(member_id: str) -> Response:
-    person = _person_or_404(member_id)
+    person = _managed_or_403(member_id, "member.edit")
     if person.status not in INVITABLE:
         flash("Pozvánku lze poslat jen osobě, která se ještě nepřihlásila.", "warning")
     else:
@@ -345,22 +390,36 @@ def batch_move() -> Response:
     return redirect(url_for("members.index"))
 
 
+def _invitable() -> list[people.Person]:
+    found = people.search_people(me().dn, statuses=sorted(INVITABLE))
+    mine = [p for p in found if me().can_in_unit("member.edit", p.unit_dn)]
+    return mine if me().is_admin else [p for p in mine if not people.is_privileged(p)]
+
+
 @bp.route("/invites")
-@require("member.edit")
+@login_required
 def invites() -> str:
-    return render_template("members/invites.html", people=people.search_people(me().dn, statuses=sorted(INVITABLE)))
+    if not me().manages_people:
+        abort(403)
+    return render_template("members/invites.html", people=_invitable())
 
 
 @bp.route("/invites/send", methods=["POST"])
-@require("member.edit")
+@login_required
 def send_invites() -> Response:
+    if not me().manages_people:
+        abort(403)
     # ponytail: one Keycloak round trip per person, synchronous; fine for tens, a job if it reaches hundreds
     sent, failed = 0, []
     for member_id in request.form.getlist("member_ids"):
         person = people.find_person(member_id, me().dn)
-        if person is None or person.status not in INVITABLE:
+        if person is None or person.status not in INVITABLE or not me().can_in_unit("member.edit", person.unit_dn):
             continue
-        if error := _invite(person):
+        try:
+            error = _invite(person)
+        except Denied:
+            error = "smí jen Admin"
+        if error:
             failed.append(f"{person.email} ({error})")
         else:
             sent += 1
@@ -371,10 +430,14 @@ def send_invites() -> Response:
 
 
 @bp.route("/<member_id>/cancel-invite", methods=["POST"])
-@require("member.edit")
+@login_required
 def cancel_invite(member_id: str) -> Response:
-    person = _person_or_404(member_id)
+    person = _managed_or_403(member_id, "member.edit")
     if person.status in INVITABLE:
-        people.set_status(person, "former", me().dn)
-        flash(f"Pozvánka pro {person.name} je zrušena, osoba je archivována.", "success")
+        try:
+            people.set_status(person, "former", me().dn)
+        except Denied:
+            flash(PRIVILEGED, "warning")
+        else:
+            flash(f"Pozvánka pro {person.name} je zrušena, osoba je archivována.", "success")
     return redirect(url_for("members.invites"))

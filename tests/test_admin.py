@@ -23,7 +23,8 @@ def test_create_and_rename_unit(client, admin):
     unit = next(u for u in people.list_units(admin.dn) if u.name == name)
     assert unit.slug.startswith("mistni-skupina-trinec-")
     groups = {e.first("cn") for e in people.d.search(unit.dn, "(objectClass=crcGroup)", ["cn"], as_dn=admin.dn)}
-    assert groups == {"members", "readers-basic", "readers-contact", "readers-extended"}
+    assert groups == {"members", "chair", "readers-basic", "readers-contact", "readers-extended"}
+    assert people.d.get(unit.requests_dn, ["ou"], as_dn=admin.dn) is not None
     client.post(f"/units/{unit.id}", data={"name": "Přejmenovaná"})
     assert people.get_unit(unit.id, admin.dn).name == "Přejmenovaná"
     assert "Přejmenovaná" in text(client.get("/units"))
@@ -183,7 +184,7 @@ def test_repair_members(world, admin):
 def test_cli_commands(app, world, admin):
     runner = app.test_cli_runner()
     assert "expired grants:" in runner.invoke(args=["expire-grants"]).output
-    assert "members groups repaired:" in runner.invoke(args=["repair-members"]).output
+    assert "entries repaired:" in runner.invoke(args=["repair-members"]).output
 
 
 # ── History and permissions ──────────────────────────────────────────────────

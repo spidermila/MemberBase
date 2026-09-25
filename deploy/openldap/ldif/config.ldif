@@ -78,6 +78,10 @@ olcDbIndex: objectClass,member,entryCSN,entryUUID eq
 olcDbIndex: crcMemberId,crcUnitId,crcQualificationId,crcHoldingId,crcGrantId eq
 olcDbIndex: crcQualificationRef,crcGrantee,crcGrantTarget,crcMemberStatus,crcMemberKind eq
 olcDbIndex: cn,mail,telephoneNumber eq,sub
+olcDbIndex: crcRequestId,crcRequestStatus eq
+# Adding an entry needs add access to each of its attributes, not just to
+# the entry: people who may add (Chairs, requesters) cannot slip in extra ones.
+olcAddContentAcl: TRUE
 {{ACCESS_RULES}}
 
 dn: olcOverlay={0}accesslog,olcDatabase={2}mdb,cn=config
@@ -97,6 +101,9 @@ objectClass: olcOverlayConfig
 objectClass: olcRefintConfig
 olcOverlay: {1}refint
 olcRefintAttribute: member
+olcRefintAttribute: crcRequestedByDn
+olcRefintAttribute: crcRequestNotify
+olcRefintAttribute: crcGrantTarget
 
 dn: olcOverlay={2}unique,olcDatabase={2}mdb,cn=config
 objectClass: olcOverlayConfig
@@ -107,4 +114,5 @@ olcUniqueURI: ldap:///?crcUnitId?sub
 olcUniqueURI: ldap:///?crcQualificationId?sub
 olcUniqueURI: ldap:///?crcHoldingId?sub
 olcUniqueURI: ldap:///?crcGrantId?sub
+olcUniqueURI: ldap:///?crcRequestId?sub
 olcUniqueURI: ldap:///?mail?sub

@@ -47,6 +47,33 @@ olcAttributeTypes: ( crcAttr:17 NAME 'crcExpiresAt'
   SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 SINGLE-VALUE )
 olcAttributeTypes: ( crcAttr:18 NAME 'crcApprovedBy' DESC 'crcMemberId of the approver'
   EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:19 NAME 'crcRequestId'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:20 NAME 'crcRequestType' DESC 'move | access'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:21 NAME 'crcRequestedByDn' DESC 'Requester; the access rules make the filer name themselves'
+  EQUALITY distinguishedNameMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.12 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:22 NAME 'crcRequestNotify' DESC 'DNs of other people who may read the request'
+  EQUALITY distinguishedNameMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.12 )
+olcAttributeTypes: ( crcAttr:23 NAME 'crcRequestStatus' DESC 'pending | approved | rejected | done | failed'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:24 NAME 'crcDecidedBy' DESC 'crcMemberId of the decider'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:25 NAME 'crcDecidedAt'
+  EQUALITY generalizedTimeMatch ORDERING generalizedTimeOrderingMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:26 NAME 'crcMoveSubject' DESC 'crcMemberId of the person to move'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:27 NAME 'crcMoveSubjectName' DESC 'Their name when filed'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:28 NAME 'crcMoveFromUnit' DESC 'crcUnitId the person moves from'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:29 NAME 'crcAccessName' DESC 'Names as the requester typed them'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+olcAttributeTypes: ( crcAttr:30 NAME 'crcAccessSubject' DESC 'crcMemberIds the decider matched and approved'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+olcAttributeTypes: ( crcAttr:31 NAME 'crcAccessLevel' DESC 'basic | contact | extended'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcObjectClasses: ( crcClass:1 NAME 'crcMember' AUXILIARY
   MUST ( crcMemberId $ crcMemberStatus $ crcMemberKind ) MAY crcStatusChangedAt )
 olcObjectClasses: ( crcClass:2 NAME 'crcUnit' AUXILIARY MUST crcUnitId MAY displayName )
@@ -60,3 +87,10 @@ olcObjectClasses: ( crcClass:7 NAME 'crcGrant' STRUCTURAL
   MUST ( crcGrantId $ crcGrantee $ crcGrantTarget ) MAY ( crcExpiresAt $ crcApprovedBy $ description ) )
 olcObjectClasses: ( crcClass:8 NAME 'crcGroup' DESC 'Group that may be empty'
   STRUCTURAL MUST cn MAY ( member $ description ) )
+olcObjectClasses: ( crcClass:9 NAME 'crcRequest' DESC 'Request decided by the Místní skupina it is filed under'
+  STRUCTURAL MUST ( crcRequestId $ crcRequestType $ crcRequestedByDn $ crcRequestStatus )
+  MAY ( crcRequestNotify $ crcDecidedBy $ crcDecidedAt $ description ) )
+olcObjectClasses: ( crcClass:10 NAME 'crcMoveRequest' AUXILIARY
+  MUST ( crcMoveSubject $ crcMoveFromUnit ) MAY crcMoveSubjectName )
+olcObjectClasses: ( crcClass:11 NAME 'crcAccessRequest' AUXILIARY
+  MUST ( crcAccessName $ crcAccessLevel ) MAY ( crcAccessSubject $ crcExpiresAt ) )
