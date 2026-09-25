@@ -29,7 +29,15 @@ def create_app(overrides: dict[str, Any] | None = None) -> Flask:
 
     @app.context_processor
     def _globals() -> dict[str, Any]:
-        return {"me": g.get("me"), "git_commit": app.config["GIT_COMMIT"], "apps": people.APPS}
+        ctx: dict[str, Any] = {"me": g.get("me"), "git_commit": app.config["GIT_COMMIT"], "apps": people.APPS}
+        if app.debug:
+            # Dev-only shortcuts to the other stack services; never shown when
+            # running from the production image (no --debug there).
+            ctx["keycloak_admin_url"] = (
+                f"{auth.public_keycloak_url()}/admin/master/console/#/{app.config['KEYCLOAK_REALM']}/users"
+            )
+            ctx["mailpit_url"] = auth.public_mailpit_url()
+        return ctx
 
     @app.after_request
     def _security_headers(response: Response) -> Response:

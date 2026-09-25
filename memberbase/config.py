@@ -30,6 +30,8 @@ def from_env() -> dict:
         "KEYCLOAK_PUBLIC_URL": _env("KEYCLOAK_PUBLIC_URL", "") or "{scheme}://{hostname}:8180",
         # Where this container reaches Keycloak (tokens, keys, admin API).
         "KEYCLOAK_INTERNAL_URL": _env("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080"),
+        # Mailpit only exists in dev; used for the debug-mode "Admin" menu.
+        "MAILPIT_PUBLIC_URL": _env("MAILPIT_PUBLIC_URL", "") or "{scheme}://{hostname}:8025",
         "KEYCLOAK_REALM": _env("KEYCLOAK_REALM", "crc"),
         "OIDC_CLIENT_ID": _env("OIDC_CLIENT_ID", "memberbase"),
         "OIDC_CLIENT_SECRET": _env("OIDC_CLIENT_SECRET"),

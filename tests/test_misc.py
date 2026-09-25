@@ -47,6 +47,26 @@ def test_landing_redirects_logged_in(client, admin):
     assert client.get("/").headers["Location"] == "/members/"
 
 
+def test_admin_menu_hidden_without_debug(client, admin):
+    login(client, admin)
+    assert ">Admin<" not in text(client.get("/profile"))
+
+
+def test_admin_menu_hidden_for_non_admin_even_in_debug(client, app, world):
+    app.config["DEBUG"] = True
+    login(client, world.person(world.unit()))
+    assert ">Admin<" not in text(client.get("/profile"))
+
+
+def test_admin_menu_shown_for_admin_in_debug(client, app, admin):
+    app.config["DEBUG"] = True
+    login(client, admin)
+    page = text(client.get("/profile"))
+    assert ">Admin<" in page
+    assert "http://kc.test/admin/master/console/#/crc/users" in page
+    assert "http://mb.test:8025" in page
+
+
 def test_directory_refusal_renders_403(client, world, monkeypatch):
     login(client, world.person(world.unit()))
 
