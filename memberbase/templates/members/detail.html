@@ -42,8 +42,8 @@
     {% else %}
     <div class="card"><div class="card-body">
       <dl class="row mb-0">
-        <dt class="col-sm-4">E-mail</dt><dd class="col-sm-8">{{ person.email or '—' }}</dd>
-        <dt class="col-sm-4">Telefon</dt><dd class="col-sm-8">{{ person.phone or '—' }}</dd>
+        <dt class="col-sm-4">E-mail</dt><dd class="col-sm-8">{% if person.email %}<a href="mailto:{{ person.email }}">{{ person.email }}</a>{% else %}—{% endif %}</dd>
+        <dt class="col-sm-4">Telefon</dt><dd class="col-sm-8">{% if person.phone %}<a href="tel:{{ person.phone|replace(' ', '') }}">{{ person.phone }}</a>{% else %}—{% endif %}</dd>
       </dl>
     </div></div>
     {% endif %}
@@ -77,16 +77,18 @@
       <div class="card-body">
         {% for app, label in apps.items() %}
         <h6 class="mt-1">{{ label }}</h6>
-        {% for r in roles if r.app == app %}
-        <div class="form-check form-check-inline">
-          <input class="form-check-input" type="checkbox" name="roles" value="{{ r.key }}" id="r{{ r.app }}{{ loop.index }}" {{ 'checked' if r.key in person.roles }}>
-          <label class="form-check-label" for="r{{ r.app }}{{ loop.index }}">{{ r.label }}</label>
+        <div class="row row-cols-1 row-cols-sm-2 g-0 mb-2">
+          {% for r in roles if r.app == app %}
+          <div class="col"><div class="form-check">
+            <input class="form-check-input" type="checkbox" name="roles" value="{{ r.key }}" id="r{{ r.app }}{{ loop.index }}" {{ 'checked' if r.key in person.roles }}>
+            <label class="form-check-label" for="r{{ r.app }}{{ loop.index }}">{{ r.label }}</label>
+          </div></div>
+          {% endfor %}
         </div>
-        {% endfor %}
         {% endfor %}
         {% if person.unit and not person.unit.is_external %}
         <h6 class="mt-1">Místní skupina</h6>
-        <div class="form-check form-check-inline">
+        <div class="form-check">
           <input class="form-check-input" type="checkbox" name="chair" value="1" id="rchair" {{ 'checked' if is_chair }}>
           <label class="form-check-label" for="rchair">Předseda MS ({{ person.unit.name }})</label>
         </div>

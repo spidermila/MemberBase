@@ -89,6 +89,20 @@ document.addEventListener("submit", function (event) {
   });
 })();
 
+// Stacked tables on phones label each cell with its column header (main.css).
+document.querySelectorAll("table.table-stack").forEach(function (table) {
+  var labels = Array.prototype.map.call(table.tHead.rows[0].cells, function (th) {
+    return th.textContent.trim();
+  });
+  Array.prototype.forEach.call(table.tBodies[0].rows, function (row) {
+    Array.prototype.forEach.call(row.cells, function (cell, i) {
+      if (labels[i] && cell.colSpan === 1) {
+        cell.dataset.label = labels[i];
+      }
+    });
+  });
+});
+
 // Sort a table by clicking a header: <th data-sort>. A cell's data-sort
 // value, if any, sorts instead of its text; empty cells go last. The last
 // sort is kept for this page and tab, so it survives the redirect after a
