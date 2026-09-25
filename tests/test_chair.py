@@ -21,10 +21,10 @@ def test_admin_appoints_and_removes_chair(client, world, admin, home):
     login(client, admin)
     assert "Předseda MS (" in text(client.get(f"/members/{person.id}"))
     client.post(f"/members/{person.id}/roles", data={"chair": "1"})
-    assert people.chairs_of(person.dn) == {home.dn.lower()}
+    assert people.memberships(person.dn)[1] == {home.dn.lower()}
     assert "Předseda MS</span>" in text(client.get(f"/members/{person.id}"))
     resp = client.post(f"/members/{person.id}/roles", data={})
-    assert people.chairs_of(person.dn) == set()
+    assert people.memberships(person.dn)[1] == set()
     assert "odebráno 1" in text(client.get(resp.headers["Location"]))
 
 
@@ -33,7 +33,7 @@ def test_external_user_cannot_be_chair(client, world, admin):
     login(client, admin)
     assert "Předseda MS (" not in text(client.get(f"/members/{ext.id}"))
     client.post(f"/members/{ext.id}/roles", data={"chair": "1"})
-    assert people.chairs_of(ext.dn) == set()
+    assert people.memberships(ext.dn)[1] == set()
 
 
 def test_chair_sees_management_screens(client, chair, home):
@@ -121,14 +121,17 @@ def test_chair_archives_and_the_job_removes_roles(client, world, chair, home, kc
     login(client, chair)
     client.post(f"/members/{person.id}/status/archive", data={"csn": person.csn})
     assert people.find_person(person.id, chair.dn).status == "former"
-    assert people.roles_of(person.dn) == {"medcover:member"}
+    assert people.memberships(person.dn)[0] == {"medcover:member"}
     assert people.repair_members() >= 1
-    assert people.roles_of(person.dn) == set()
+    assert people.memberships(person.dn)[0] == set()
 
 
-def test_chair_invites_only_own_people(client, world, chair, home, kc):
+def test_chair_invites_only_own_people(client, world, admin, chair, home, kc):
     mine = world.person(home, "Moje Pozvaná", status="new")
-    theirs = world.person(world.unit(), "Cizí Pozvaná", status="new")
+    other = world.unit()
+    theirs = world.person(other, "Cizí Pozvaná", status="new")
+    # Seeing people of another Místní skupina is not managing them.
+    people.create_grant(chair.id, other, "contact", None, "", admin.id, admin.dn)
     kc_user(kc, mine.email)
     kc.put(f"{KC}/admin/realms/crc/users/kc-1/execute-actions-email", json={})
     login(client, chair)
@@ -144,7 +147,7 @@ def test_admin_move_of_chair_ends_chairing(client, world, admin, chair):
     login(client, admin)
     target = world.unit()
     client.post(f"/members/{chair.id}/move", data={"unit": target.id, "csn": chair.csn})
-    assert people.chairs_of(people.find_person(chair.id, admin.dn).dn) == set()
+    assert people.memberships(people.find_person(chair.id, admin.dn).dn)[1] == set()
 
 
 def test_admin_archive_of_chair_ends_chairing(client, world, admin, chair, kc):
@@ -152,7 +155,7 @@ def test_admin_archive_of_chair_ends_chairing(client, world, admin, chair, kc):
     kc.post(f"{KC}/admin/realms/crc/users/kc-1/logout")
     login(client, admin)
     client.post(f"/members/{chair.id}/status/archive", data={"csn": chair.csn})
-    assert people.chairs_of(chair.dn) == set()
+    assert people.memberships(chair.dn)[1] == set()
 
 
 def test_permissions_page_lists_chair(client, admin):

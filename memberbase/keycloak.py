@@ -2,10 +2,11 @@
 reset emails, ending sessions, removing second factors. Authenticates with
 MemberBase's own client (client-credentials grant)."""
 
+from typing import Any
 from urllib.parse import urlsplit
 
 import requests
-from flask import current_app, has_request_context
+from flask import current_app, g, has_request_context
 
 from memberbase import auth
 
@@ -35,6 +36,13 @@ def _realm_url() -> str:
 
 
 def service_token() -> str:
+    """MemberBase's own access token, fetched once per request."""
+    if "kc_token" not in g:
+        g.kc_token = _fetch_token()
+    return g.kc_token
+
+
+def _fetch_token() -> str:
     cfg = current_app.config
     resp = requests.post(
         f"{cfg['KEYCLOAK_INTERNAL_URL']}/realms/{cfg['KEYCLOAK_REALM']}/protocol/openid-connect/token",
@@ -48,7 +56,7 @@ def service_token() -> str:
     return resp.json()["access_token"]
 
 
-def _call(method: str, path: str, **kwargs) -> requests.Response:  # type: ignore[no-untyped-def]
+def _call(method: str, path: str, **kwargs: Any) -> requests.Response:
     try:
         resp = requests.request(
             method,

@@ -58,7 +58,7 @@ def _qual_or_404(qual_id: str) -> people.Qualification:
 @require("qualification.manage")
 def qualifications() -> str:
     quals = people.list_qualifications(me().dn)
-    counts = {q.id: len(people.holders(q.id, me().dn)) for q in quals}
+    counts = people.holding_counts(me().dn)
     return render_template("admin/qualifications.html", quals=quals, counts=counts, names={q.id: q.name for q in quals})
 
 
@@ -113,7 +113,8 @@ def delete_qualification(qual_id: str) -> Response:
 @require("grant.manage")
 def grants() -> str | Response:
     units = people.list_units(me().dn, include_external=True)
-    everyone = people.search_people(me().dn, statuses=["new", "invited", "active", "inactive"])
+    all_people = people.search_people(me().dn, units=units)
+    everyone = [p for p in all_people if p.status in people.CURRENT_STATUSES]
     if request.method == "POST":
         form = request.form
         target = next((u for u in units if u.id == form.get("target")), None)
@@ -144,7 +145,7 @@ def grants() -> str | Response:
         grants=sorted(people.list_grants(me().dn), key=lambda g: people.sort_key(names.get(g.grantee, ""))),
         units=units,
         owner_names={u.dn.lower(): u.name for u in units}
-        | {p.dn.lower(): f"{p.name} ({p.unit.name})" for p in people.search_people(me().dn) if p.unit},
+        | {p.dn.lower(): f"{p.name} ({p.unit.name})" for p in all_people if p.unit},
         people=everyone,
         names=names,
         levels=people.LEVELS,
@@ -168,7 +169,7 @@ def revoke_grant(grant_id: str) -> Response:
 @bp.route("/history")
 @require("history.view")
 def global_history() -> str:
-    return render_template("admin/history.html", changes=history.changes(me().dn))
+    return render_template("admin/history.html", changes=history.changes(me().dn), days=history.RECENT_DAYS)
 
 
 def medcover_roles() -> tuple[dict | None, str]:

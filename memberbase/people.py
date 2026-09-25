@@ -6,6 +6,7 @@ activation of invited people, the grant and consistency jobs)."""
 
 import unicodedata
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
@@ -23,7 +24,10 @@ STATUSES = {
     "former": "Archivovaný",
 }
 LEVELS = {"basic": "Jméno", "contact": "Jméno a kontakt", "extended": "Rozšířené údaje"}
+# Everyone not archived.
+CURRENT_STATUSES = ["new", "invited", "active", "inactive"]
 APPS = {"medcover": "MedCover", "memberbase": "Evidence členů"}
+ADMIN_ROLE = "memberbase:admin"
 EXTERNAL_SLUG = "external"
 PRAGUE = ZoneInfo("Europe/Prague")
 
@@ -50,8 +54,13 @@ def new_id() -> str:
     return str(uuid.uuid4())
 
 
+def ldap_time(moment: datetime) -> str:
+    """datetime (UTC) → GeneralizedTime."""
+    return moment.strftime("%Y%m%d%H%M%SZ")
+
+
 def now_ldap() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d%H%M%SZ")
+    return ldap_time(datetime.now(UTC))
 
 
 def parse_ldap_time(value: str) -> datetime | None:
@@ -65,6 +74,12 @@ def parse_ldap_time(value: str) -> datetime | None:
         except ValueError:
             continue
     return None
+
+
+def local_time(value: str) -> datetime | None:
+    """GeneralizedTime → datetime in Prague, for display."""
+    moment = parse_ldap_time(value)
+    return moment.astimezone(PRAGUE) if moment else None
 
 
 def split_name(full_name: str) -> tuple[str, str]:
@@ -102,6 +117,18 @@ class Unit:
     def readers_dn(self, level: str) -> str:
         return f"cn=readers-{level},{self.dn}"
 
+    @property
+    def member_kind(self) -> str:
+        """crcMemberKind of the people inside."""
+        return "external" if self.is_external else "member"
+
+
+REQUESTS_OU = {"objectClass": ["organizationalUnit"], "ou": ["requests"]}
+
+
+def _group(cn: str) -> dict[str, list[str]]:
+    return {"objectClass": ["crcGroup"], "cn": [cn]}
+
 
 def units_base() -> str:
     return f"ou=units,{d.base_dn()}"
@@ -116,12 +143,13 @@ def _unit(entry: Entry) -> Unit:
 
 
 def list_units(as_dn: str | None, include_external: bool = False) -> list[Unit]:
-    attrs = ["ou", "crcUnitId", "displayName"]
-    units = [_unit(e) for e in d.search(units_base(), "(objectClass=crcUnit)", attrs, ldap.SCOPE_ONELEVEL, as_dn)]
-    units.sort(key=lambda u: sort_key(u.name))
-    if include_external:
-        units += [_unit(e) for e in d.search(external_dn(), "(objectClass=crcUnit)", attrs, ldap.SCOPE_BASE, as_dn)]
-    return units
+    """Místní skupiny by name, then (if asked) the external users."""
+    found = [
+        _unit(e)
+        for e in d.search(d.base_dn(), "(objectClass=crcUnit)", ["ou", "crcUnitId", "displayName"], as_dn=as_dn)
+    ]
+    units = sorted((u for u in found if not u.is_external), key=lambda u: sort_key(u.name))
+    return units + [u for u in found if u.is_external] if include_external else units
 
 
 def get_unit(unit_id: str, as_dn: str | None) -> Unit | None:
@@ -150,8 +178,8 @@ def create_unit(name: str, as_dn: str) -> Unit:
         as_dn,
     )
     for cn in ["members", "chair", *(f"readers-{level}" for level in LEVELS)]:
-        d.add(f"cn={cn},{unit.dn}", {"objectClass": ["crcGroup"], "cn": [cn]}, as_dn)
-    d.add(unit.requests_dn, {"objectClass": ["organizationalUnit"], "ou": ["requests"]}, as_dn)
+        d.add(f"cn={cn},{unit.dn}", _group(cn), as_dn)
+    d.add(unit.requests_dn, REQUESTS_OU, as_dn)
     return unit
 
 
@@ -205,10 +233,10 @@ def _person(entry: Entry) -> Person:
     )
 
 
-def _attach_units(people: list[Person], as_dn: str | None) -> None:
-    units = {u.dn.lower(): u for u in list_units(as_dn, include_external=True)}
+def _attach_units(people: list[Person], as_dn: str | None, units: list[Unit] | None = None) -> None:
+    by_dn = {u.dn.lower(): u for u in (units or list_units(as_dn, include_external=True))}
     for person in people:
-        person.unit = units.get(person.unit_dn.lower())
+        person.unit = by_dn.get(person.unit_dn.lower())
 
 
 def search_people(
@@ -216,7 +244,11 @@ def search_people(
     q: str = "",
     unit: Unit | None = None,
     statuses: list[str] | None = None,
+    ids: list[str] | None = None,
+    units: list[Unit] | None = None,
 ) -> list[Person]:
+    """People matching all given criteria, by name. `units` (every visible
+    Místní skupina and the external users) saves listing them again."""
     parts = ["(objectClass=crcMember)"]
     q = "".join(c for c in q if c.isprintable())
     if q:
@@ -226,23 +258,26 @@ def search_people(
         parts.append(f"(|(cn=*{esc}*)(mail=*{esc}*){phone})")
     if statuses:
         parts.append("(|" + "".join(f"(crcMemberStatus={escape_filter_chars(s)})" for s in statuses) + ")")
+    if ids is not None:
+        parts.append("(|" + "".join(f"(crcMemberId={escape_filter_chars(i)})" for i in ids) + ")")
     filterstr = "(&" + "".join(parts) + ")"
     if unit is None:
-        entries = d.search(units_base(), filterstr, PERSON_ATTRS, as_dn=as_dn)
-        entries += d.search(external_dn(), filterstr, PERSON_ATTRS, ldap.SCOPE_ONELEVEL, as_dn)
+        entries = d.search(d.base_dn(), filterstr, PERSON_ATTRS, as_dn=as_dn)
     else:
         entries = d.search(unit.dn, filterstr, PERSON_ATTRS, ldap.SCOPE_ONELEVEL, as_dn)
     people = [_person(e) for e in entries]
-    _attach_units(people, as_dn)
+    _attach_units(people, as_dn, units)
     people.sort(key=lambda p: sort_key(p.name))
     return people
 
 
-def find_person(member_id: str, as_dn: str | None) -> Person | None:
-    """Look a person up by crcMemberId. Returns None if absent or not visible."""
+def find_person(member_id: str, as_dn: str | None, with_unit: bool = True) -> Person | None:
+    """Look a person up by crcMemberId. Returns None if absent or not visible.
+    Without `with_unit`, `unit` stays None and listing the units is saved."""
     filterstr = f"(&(objectClass=crcMember)(crcMemberId={escape_filter_chars(member_id)}))"
-    entries = d.search(units_base(), filterstr, PERSON_ATTRS, as_dn=as_dn)
-    entries += d.search(external_dn(), filterstr, PERSON_ATTRS, ldap.SCOPE_ONELEVEL, as_dn)
+    entries = d.search(d.base_dn(), filterstr, PERSON_ATTRS, as_dn=as_dn)
+    if not with_unit:
+        return _person(entries[0]) if entries else None
     return _first_person(entries, as_dn)
 
 
@@ -275,7 +310,7 @@ def create_person(name: str, email: str, phone: str, unit: Unit, as_dn: str) -> 
             "mail": [email],
             "telephoneNumber": [phone] if phone else [],
             "crcMemberStatus": ["new"],
-            "crcMemberKind": ["external" if unit.is_external else "member"],
+            "crcMemberKind": [unit.member_kind],
             "crcStatusChangedAt": [now_ldap()],
         },
         as_dn,
@@ -342,7 +377,7 @@ def move_person(person: Person, target: Unit, as_dn: str | None, csn: str | None
         if old_members:
             d.add_values(old_members, "member", [person.dn], as_dn)
         raise
-    d.modify(new_dn, {"crcMemberKind": ["external" if target.is_external else "member"]}, as_dn)
+    d.modify(new_dn, {"crcMemberKind": [target.member_kind]}, as_dn)
     if not target.is_external:
         d.add_values(target.members_dn, "member", [new_dn], as_dn)
 
@@ -375,16 +410,30 @@ def list_roles(as_dn: str | None, with_members: bool = False) -> list[Role]:
     return roles
 
 
-def roles_of(person_dn: str) -> set[str]:
-    """Role keys ("app:name") of a person, read by the service account."""
+def role_keys(person: Person, roles: list[Role]) -> set[str]:
+    """Which of `roles` (listed with members) the person holds."""
+    return {r.key for r in roles if person.dn.lower() in r.members}
+
+
+def memberships(person_dn: str) -> tuple[set[str], set[str]]:
+    """Role keys ("app:name") of a person, and the DNs (lower case) of the
+    Místní skupiny they chair, in one search by the service account."""
     filterstr = f"(&(objectClass=crcGroup)(member={escape_filter_chars(person_dn)}))"
-    found = d.search(f"ou=apps,{d.base_dn()}", filterstr, ["cn"])
-    return {f"{e.dn.split(',')[2].removeprefix('ou=')}:{e.first('cn')}" for e in found}
+    apps, units = f",ou=apps,{d.base_dn()}".lower(), f",{units_base()}".lower()
+    roles, chairs = set(), set()
+    for e in d.search(d.base_dn(), filterstr, ["cn"]):
+        dn = e.dn.lower()
+        if dn.endswith(apps):
+            roles.add(f"{dn.split(',')[2].removeprefix('ou=')}:{e.first('cn')}")
+        elif dn.startswith("cn=chair,") and dn.endswith(units):
+            chairs.add(e.parent_dn.lower())
+    return roles, chairs
 
 
 def set_roles(person: Person, wanted: set[str], as_dn: str) -> tuple[set[str], set[str]]:
-    roles = {r.key: r for r in list_roles(as_dn, with_members=True)}
-    current = {k for k, r in roles.items() if person.dn.lower() in r.members}
+    listed = list_roles(as_dn, with_members=True)
+    roles = {r.key: r for r in listed}
+    current = role_keys(person, listed)
     wanted &= set(roles)
     for key in wanted - current:
         d.add_values(roles[key].dn, "member", [person.dn], as_dn)
@@ -399,27 +448,25 @@ def toggle_role(person: Person, role: Role, add: bool, as_dn: str) -> None:
 
 def remove_all_roles(person: Person, as_dn: str) -> None:
     set_roles(person, set(), as_dn)
-    unit = person.unit
-    if unit is not None and not unit.is_external and person.dn.lower() in chair_members(unit, as_dn):
-        d.delete_values(unit.chair_dn, "member", [person.dn], as_dn)
+    if is_chair(person, as_dn):
+        set_chair(person, False, as_dn)
 
 
 # Roles whose holders only Admins may edit, change status of, or move (the
 # directory's access rules list the same roles, plus Chairs).
-PRIVILEGED_ROLES = {"memberbase:admin", "memberbase:district-coordinator", "medcover:admin", "medcover:coordinator"}
-
-
-def chairs_of(person_dn: str) -> set[str]:
-    """DNs (lower case) of the Místní skupiny a person chairs, read by the
-    service account."""
-    filterstr = f"(&(objectClass=crcGroup)(cn=chair)(member={escape_filter_chars(person_dn)}))"
-    return {e.parent_dn.lower() for e in d.search(units_base(), filterstr, ["cn"])}
+PRIVILEGED_ROLES = {ADMIN_ROLE, "memberbase:district-coordinator", "medcover:admin", "medcover:coordinator"}
 
 
 def chair_members(unit: Unit, as_dn: str | None) -> set[str]:
     """DNs (lower case) of the Chairs of a Místní skupina, if visible."""
     group = d.get(unit.chair_dn, ["member"], as_dn)
     return {m.lower() for m in group.all("member")} if group else set()
+
+
+def is_chair(person: Person, as_dn: str | None) -> bool:
+    """Chairs their own Místní skupina, as far as `as_dn` can see."""
+    unit = person.unit
+    return unit is not None and not unit.is_external and person.dn.lower() in chair_members(unit, as_dn)
 
 
 def set_chair(person: Person, add: bool, as_dn: str) -> None:
@@ -429,7 +476,8 @@ def set_chair(person: Person, add: bool, as_dn: str) -> None:
 
 def is_privileged(person: Person) -> bool:
     """Holds a privileged role or chairs a Místní skupina (service account)."""
-    return bool(roles_of(person.dn) & PRIVILEGED_ROLES) or bool(chairs_of(person.dn))
+    roles, chairs = memberships(person.dn)
+    return bool(roles & PRIVILEGED_ROLES) or bool(chairs)
 
 
 # ── Qualifications (MedCover namespace) ──────────────────────────────────────
@@ -494,6 +542,12 @@ def holders(qual_id: str, as_dn: str) -> list[str]:
     filterstr = f"(&(objectClass=crcHolding)(crcQualificationRef={escape_filter_chars(qual_id)}))"
     found = d.search(d.base_dn(), filterstr, ["crcHoldingId"], as_dn=as_dn)
     return [e.parent_dn for e in found]
+
+
+def holding_counts(as_dn: str) -> Counter[str]:
+    """How many people hold each qualification (by id)."""
+    found = d.search(d.base_dn(), "(objectClass=crcHolding)", ["crcQualificationRef"], as_dn=as_dn)
+    return Counter(e.first("crcQualificationRef") for e in found)
 
 
 def delete_qualification(qual: Qualification, as_dn: str) -> bool:
@@ -598,7 +652,7 @@ def create_grant(
         raise ValueError(grantee)
     if isinstance(target, Person):
         try:
-            d.add(target.readers_dn(level), {"objectClass": ["crcGroup"], "cn": [f"readers-{level}"]}, as_dn)
+            d.add(target.readers_dn(level), _group(f"readers-{level}"), as_dn)
         except ldap.ALREADY_EXISTS:
             pass
     grant_id = new_id()
@@ -609,7 +663,7 @@ def create_grant(
             "crcGrantId": [grant_id],
             "crcGrantee": [grantee],
             "crcGrantTarget": [target.readers_dn(level)],
-            "crcExpiresAt": [expires_at.strftime("%Y%m%d%H%M%SZ")] if expires_at else [],
+            "crcExpiresAt": [ldap_time(expires_at)] if expires_at else [],
             "crcApprovedBy": [approved_by],
             "description": [description] if description else [],
         },
@@ -646,9 +700,7 @@ def repair_members() -> int:
     chairing away from archived people (an archiving Chair cannot), and add
     missing cn=chair and ou=requests. Returns entries fixed."""
     fixed = 0
-    former_filter = "(&(objectClass=crcMember)(crcMemberStatus=former))"
-    former = {e.dn.lower() for e in d.search(units_base(), former_filter, ["cn"])}
-    former |= {e.dn.lower() for e in d.search(external_dn(), former_filter, ["cn"], ldap.SCOPE_ONELEVEL)}
+    former = {e.dn.lower() for e in d.search(d.base_dn(), "(&(objectClass=crcMember)(crcMemberStatus=former))", ["cn"])}
     groups = {r.dn: r.members for r in list_roles(None, with_members=True)}
     groups |= {u.chair_dn: chair_members(u, None) for u in list_units(None)}
     for dn, members in groups.items():
@@ -658,10 +710,10 @@ def repair_members() -> int:
     for unit in list_units(None):
         # Místní skupiny created before Chairs and requests existed.
         if d.get(unit.chair_dn, ["cn"]) is None:
-            d.add(unit.chair_dn, {"objectClass": ["crcGroup"], "cn": ["chair"]}, None)
+            d.add(unit.chair_dn, _group("chair"), None)
             fixed += 1
         if d.get(unit.requests_dn, ["ou"]) is None:
-            d.add(unit.requests_dn, {"objectClass": ["organizationalUnit"], "ou": ["requests"]}, None)
+            d.add(unit.requests_dn, REQUESTS_OU, None)
             fixed += 1
         actual = {e.dn for e in d.search(unit.dn, "(objectClass=crcMember)", ["crcMemberId"], ldap.SCOPE_ONELEVEL)}
         group = d.get(unit.members_dn, ["member"])

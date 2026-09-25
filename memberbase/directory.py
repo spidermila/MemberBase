@@ -6,8 +6,9 @@ rules decide), optimistic locking via an assertion on entryCSN, and escaping
 of every value placed in a filter or DN.
 """
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from typing import Any
 
 import ldap
 from flask import current_app, g
@@ -16,7 +17,7 @@ from ldap.controls.simple import ProxyAuthzControl
 from ldap.dn import escape_dn_chars
 from ldap.filter import escape_filter_chars
 
-__all__ = ["Entry", "StaleEntry", "Denied", "Conflict", "escape_filter_chars", "escape_dn_chars"]
+__all__ = ["Entry", "StaleEntry", "Denied", "Conflict", "TooMany", "escape_filter_chars", "escape_dn_chars"]
 
 
 class StaleEntry(Exception):
@@ -29,6 +30,10 @@ class Denied(Exception):
 
 class Conflict(Exception):
     """A unique value (e.g. email) is already used by another entry."""
+
+
+class TooMany(Exception):
+    """A search matched more entries than the server's size limit."""
 
 
 @dataclass
@@ -116,6 +121,8 @@ def search(
         result = _conn().search_ext_s(base, scope, filterstr, attrlist, serverctrls=_controls(as_dn))
     except ldap.NO_SUCH_OBJECT:
         return []
+    except ldap.SIZELIMIT_EXCEEDED as exc:
+        raise TooMany() from exc
     return [Entry(dn, _decode(a)) for dn, a in result if dn is not None]
 
 
@@ -124,7 +131,7 @@ def get(dn: str, attrs: list[str] | None = None, as_dn: str | None = None) -> En
     return found[0] if found else None
 
 
-def _write(call, *args, as_dn: str | None, assertion: str | None = None) -> None:  # type: ignore[no-untyped-def]
+def _write(call: Callable[..., Any], *args: Any, as_dn: str | None, assertion: str | None = None) -> None:
     try:
         call(*args, serverctrls=_controls(as_dn, assertion))
     except ldap.ASSERTION_FAILED as exc:

@@ -13,7 +13,7 @@ from flask import Blueprint, Flask, abort, current_app, flash, g, redirect, rend
 from werkzeug.wrappers import Response
 
 from memberbase import people
-from memberbase.permissions import ADMIN, CHAIR, CHAIR_UNIT_PERMISSIONS, permissions_for
+from memberbase.permissions import CHAIR, CHAIR_UNIT_PERMISSIONS, permissions_for
 
 bp = Blueprint("auth", __name__)
 oauth = OAuth()
@@ -24,7 +24,7 @@ KC_ACTIONS = {"UPDATE_PASSWORD", "CONFIGURE_TOTP", "webauthn-register", "webauth
 
 @dataclass
 class Me:
-    person: people.Person
+    person: people.Person  # loaded without `unit`; use `unit_dn`
     roles: set[str]
     permissions: set[str]
     chairs: set[str] = field(default_factory=set)  # DNs (lower case) of the Místní skupiny chaired
@@ -50,7 +50,7 @@ class Me:
 
     @property
     def is_admin(self) -> bool:
-        return f"memberbase:{ADMIN}" in self.roles
+        return people.ADMIN_ROLE in self.roles
 
 
 def init_app(app: Flask) -> None:
@@ -69,18 +69,18 @@ def init_app(app: Flask) -> None:
     app.register_blueprint(bp)
 
 
+def _public_url(config_key: str) -> str:
+    return current_app.config[config_key].format(scheme=request.scheme, hostname=request.host.rsplit(":", 1)[0])
+
+
 def public_keycloak_url() -> str:
     """Keycloak's browser-facing base URL for the current request."""
-    return current_app.config["KEYCLOAK_PUBLIC_URL"].format(
-        scheme=request.scheme, hostname=request.host.rsplit(":", 1)[0]
-    )
+    return _public_url("KEYCLOAK_PUBLIC_URL")
 
 
 def public_mailpit_url() -> str:
     """Mailpit's browser-facing base URL for the current request (dev only)."""
-    return current_app.config["MAILPIT_PUBLIC_URL"].format(
-        scheme=request.scheme, hostname=request.host.rsplit(":", 1)[0]
-    )
+    return _public_url("MAILPIT_PUBLIC_URL")
 
 
 def load_me() -> Response | None:
@@ -90,14 +90,13 @@ def load_me() -> Response | None:
     member_id = session.get("member_id")
     if member_id is None or request.endpoint == "static":
         return None
-    person = people.find_person(member_id, None)
+    person = people.find_person(member_id, None, with_unit=False)
     if person is None or person.status != "active":
         session.clear()
         flash("Váš účet není aktivní.", "danger")
         return redirect(url_for("main.index"))
-    app_roles = people.roles_of(person.dn)
+    app_roles, chairs = people.memberships(person.dn)
     mb_roles = {r.split(":", 1)[1] for r in app_roles if r.startswith("memberbase:")}
-    chairs = people.chairs_of(person.dn)
     g.me = Me(person, app_roles, permissions_for(mb_roles | ({CHAIR} if chairs else set())), chairs)
     return None
 

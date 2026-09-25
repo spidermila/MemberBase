@@ -3,6 +3,6 @@
 {% block title %}Historie změn – Evidence členů{% endblock %}
 {% block content %}
 <h2>Historie změn</h2>
-<p class="text-body-secondary">Posledních {{ changes|length }} změn. Záznamy zapisuje adresářový server a nelze je upravit.</p>
+<p class="text-body-secondary">Nejnovější změny z posledních {{ days }} dní (zobrazeno {{ changes|length }}). Záznamy zapisuje adresářový server a nelze je upravit.</p>
 {{ changes_table(changes) }}
 {% endblock %}

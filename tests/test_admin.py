@@ -1,8 +1,10 @@
 import uuid
 
+import ldap
 import pytest
 import responses
 
+from memberbase import directory as d
 from memberbase import history, people
 from tests.conftest import login
 
@@ -208,6 +210,31 @@ def test_global_history(client, world, admin):
         "všichni z",
     ]:
         assert fragment in page, fragment
+
+
+def test_global_history_narrows_after_a_burst(app, admin, monkeypatch):
+    searched = []
+
+    def search(base, filterstr, *args, **kwargs):
+        searched.append(filterstr)
+        if len(searched) == 1:
+            raise d.TooMany()
+        return []
+
+    monkeypatch.setattr(d, "search", search)
+    assert history.changes(admin.dn) == []
+    assert searched[0].startswith(f"(&(reqStart>={history._ago(history.RECENT_DAYS)[:8]}")
+    assert searched[1].startswith(f"(&(reqStart>={history._ago(1)[:8]}")
+
+
+def test_search_over_size_limit(app, monkeypatch):
+    class Conn:
+        def search_ext_s(self, *args, **kwargs):
+            raise ldap.SIZELIMIT_EXCEEDED()
+
+    monkeypatch.setattr(d, "_conn", Conn)
+    with pytest.raises(d.TooMany):
+        d.search(d.base_dn())
 
 
 def test_history_labels(app, admin):

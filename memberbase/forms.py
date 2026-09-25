@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 _PHONE_RE = re.compile(r"^\d{9}$|^(\+|00)\d{10,15}$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAX_NAME = 120
+MAX_NOTE = 200
 
 
 def clean_name(raw: str) -> tuple[str, str | None]:
@@ -16,6 +17,11 @@ def clean_name(raw: str) -> tuple[str, str | None]:
     if len(name) > MAX_NAME:
         return name, f"Jméno může mít nejvýše {MAX_NAME} znaků."
     return name, None
+
+
+def clean_note(raw: str) -> str:
+    """Free text on one line, cut to MAX_NOTE."""
+    return " ".join(raw.split())[:MAX_NOTE]
 
 
 def clean_email(raw: str) -> tuple[str, str | None]:

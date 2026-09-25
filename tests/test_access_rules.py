@@ -369,7 +369,7 @@ def test_chair_cannot_assign_roles_or_grants(setup, admin, chair):
 def test_own_unit_sees_its_chairs_others_do_not(setup, chair):
     assert people.chair_members(setup["home"], setup["alice"].dn) == {chair.dn.lower()}
     assert people.chair_members(setup["home"], setup["bob"].dn) == set()
-    assert people.chairs_of(chair.dn) == {setup["home"].dn.lower()}
+    assert people.memberships(chair.dn)[1] == {setup["home"].dn.lower()}
 
 
 def test_chair_reads_nothing_more_of_other_units(setup, chair):
@@ -507,8 +507,8 @@ def test_members_job_strips_archived_people_of_roles_and_chair(setup, world, adm
     chair = world.chair(setup["home"], "Klára Končící", roles=["medcover:member"])
     d.modify(chair.dn, {"crcMemberStatus": ["former"]}, admin.dn)
     assert people.repair_members() >= 2
-    assert people.roles_of(chair.dn) == set()
-    assert people.chairs_of(chair.dn) == set()
+    assert people.memberships(chair.dn)[0] == set()
+    assert people.memberships(chair.dn)[1] == set()
 
 
 def test_chair_cannot_reopen_or_self_file_requests(setup, world, admin):

@@ -2,6 +2,7 @@
 invitations and second-factor reset."""
 
 import time
+from collections.abc import Mapping
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from werkzeug.wrappers import Response
@@ -38,6 +39,14 @@ def _back(person: people.Person) -> Response:
     return redirect(url_for("members.detail", member_id=person.id))
 
 
+def _clean_person(form: Mapping[str, str]) -> tuple[str, str, str, list[str]]:
+    """Name, email and phone from a form, and what is wrong with them."""
+    name, e1 = forms.clean_name(form.get("name", ""))
+    email, e2 = forms.clean_email(form.get("email", ""))
+    phone, e3 = forms.clean_phone(form.get("phone", ""))
+    return name, email, phone, [e for e in (e1, e2, e3) if e]
+
+
 def _managed_or_403(member_id: str, permission: str) -> people.Person:
     """The person, if the logged-in person may do `permission` to them: by
     role anywhere, or as Chair of their Místní skupina."""
@@ -53,14 +62,14 @@ def index() -> str:
     units = people.list_units(me().dn, include_external=True)
     unit = next((u for u in units if u.id == request.args.get("unit")), None)
     archived = request.args.get("archived") == "1"
-    statuses = ["former"] if archived else ["new", "invited", "active", "inactive"]
-    found = people.search_people(me().dn, request.args.get("q", "").strip(), unit, statuses)
+    statuses = ["former"] if archived else people.CURRENT_STATUSES
+    found = people.search_people(me().dn, request.args.get("q", "").strip(), unit, statuses, units=units)
     can_see_roles = me().can("member.view_all")
     roles = people.list_roles(me().dn, with_members=can_see_roles)
     role_filter = request.args.get("role", "")
     if can_see_roles:
         for person in found:
-            person.roles = {r.key for r in roles if person.dn.lower() in r.members}
+            person.roles = people.role_keys(person, roles)
         if role_filter:
             found = [p for p in found if role_filter in p.roles]
     return render_template(
@@ -84,11 +93,10 @@ def create() -> str | Response:
         abort(403)
     form = request.form
     if request.method == "POST":
-        name, e1 = forms.clean_name(form.get("name", ""))
-        email, e2 = forms.clean_email(form.get("email", ""))
-        phone, e3 = forms.clean_phone(form.get("phone", ""))
+        name, email, phone, errors = _clean_person(form)
         unit = next((u for u in units if u.id == form.get("unit")), None)
-        errors = [e for e in (e1, e2, e3) if e] + ([] if unit else ["Vyberte místní skupinu."])
+        if unit is None:
+            errors.append("Vyberte místní skupinu.")
         if not errors and unit is not None:
             try:
                 person = people.create_person(name, email, phone, unit, me().dn)
@@ -118,13 +126,11 @@ def detail(member_id: str) -> str:
         "can_edit": me().can_in_unit("member.edit", unit_dn) and not protected,
         "can_status": me().can_in_unit("member.status", unit_dn) and not protected,
         "can_quals": me().can_in_unit("qualification.manage", unit_dn) and not protected,
-        "is_chair": person.unit is not None
-        and not person.unit.is_external
-        and person.dn.lower() in people.chair_members(person.unit, me().dn),
+        "is_chair": people.is_chair(person, me().dn),
     }
     if me().can("role.assign"):
         ctx["roles"] = people.list_roles(me().dn, with_members=True)
-        person.roles = {r.key for r in ctx["roles"] if person.dn.lower() in r.members}
+        person.roles = people.role_keys(person, ctx["roles"])
     ctx["quals"] = people.list_qualifications(me().dn)
     ctx["held"] = set(people.holdings_of(person, me().dn))
     if me().can("member.move"):
@@ -147,10 +153,7 @@ def _notify_email_change(person: people.Person, new_email: str) -> None:
 @login_required
 def edit(member_id: str) -> Response:
     person = _managed_or_403(member_id, "member.edit")
-    name, e1 = forms.clean_name(request.form.get("name", ""))
-    email, e2 = forms.clean_email(request.form.get("email", ""))
-    phone, e3 = forms.clean_phone(request.form.get("phone", ""))
-    errors = [e for e in (e1, e2, e3) if e]
+    name, email, phone, errors = _clean_person(request.form)
     if errors:
         for error in errors:
             flash(error, "danger")
@@ -233,7 +236,7 @@ def roles(member_id: str) -> Response:
         return _back(person)
     added, removed = people.set_roles(person, set(request.form.getlist("roles")), me().dn)
     if person.unit is not None and not person.unit.is_external:
-        is_chair = person.dn.lower() in people.chair_members(person.unit, me().dn)
+        is_chair = people.is_chair(person, me().dn)
         if is_chair != bool(request.form.get("chair")):
             people.set_chair(person, not is_chair, me().dn)
             (removed if is_chair else added).add("chair")
@@ -353,9 +356,8 @@ def batch() -> Response:
         flash("Vyberte osoby, roli a akci.", "warning")
         return redirect(url_for("members.index"))
     changed = 0
-    for member_id in ids:
-        person = people.find_person(member_id, me().dn)
-        if person is None or (action == "add" and person.status == "former"):
+    for person in people.search_people(me().dn, ids=ids):
+        if action == "add" and person.status == "former":
             continue
         if (person.dn.lower() in role.members) == (action == "remove"):
             people.toggle_role(person, role, action == "add", me().dn)
@@ -374,9 +376,8 @@ def batch_move() -> Response:
         flash("Vyberte osoby a cílovou místní skupinu.", "warning")
         return redirect(url_for("members.index"))
     moved, stale = 0, 0
-    for member_id in ids:
-        person = people.find_person(member_id, me().dn)
-        if person is None or person.unit_dn.lower() == target.dn.lower():
+    for person in people.search_people(me().dn, ids=ids):
+        if person.unit_dn.lower() == target.dn.lower():
             continue
         try:
             people.move_person(person, target, me().dn, person.csn)
@@ -411,9 +412,8 @@ def send_invites() -> Response:
         abort(403)
     # ponytail: one Keycloak round trip per person, synchronous; fine for tens, a job if it reaches hundreds
     sent, failed = 0, []
-    for member_id in request.form.getlist("member_ids"):
-        person = people.find_person(member_id, me().dn)
-        if person is None or person.status not in INVITABLE or not me().can_in_unit("member.edit", person.unit_dn):
+    for person in people.search_people(me().dn, statuses=sorted(INVITABLE), ids=request.form.getlist("member_ids")):
+        if not me().can_in_unit("member.edit", person.unit_dn):
             continue
         try:
             error = _invite(person)
