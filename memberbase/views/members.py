@@ -1,7 +1,9 @@
 """Členové: list, detail, create, edit, status, move, roles, qualifications,
 invitations and second-factor reset."""
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+import time
+
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from werkzeug.wrappers import Response
 
 from memberbase import forms, history, keycloak, mail, people
@@ -265,6 +267,26 @@ def mfa_reset(member_id: str) -> Response:
         "Pokud jste o reset nežádali, kontaktujte ihned správce oblastního spolku.\n",
     )
     return _back(person)
+
+
+@bp.route("/<member_id>/login-as", methods=["POST"])
+@login_required
+@recent_login
+def login_as(member_id: str) -> Response:
+    """Dev-only: switch the admin's own session to another active person,
+    without going through Keycloak. Never reachable outside --debug."""
+    if not current_app.debug or not me().is_admin:
+        abort(404)
+    person = _person_or_404(member_id)
+    if person.status != "active" or person.id == me().person.id:
+        abort(404)
+    session.clear()
+    session.permanent = True
+    session["member_id"] = person.id
+    session["auth_time"] = time.time()
+    session["id_token"] = ""
+    flash(f"Přihlášen jako „{person.name}“ (vývojářský nástroj, jen v DEV).", "warning")
+    return redirect(url_for("main.index"))
 
 
 @bp.route("/<member_id>/history")

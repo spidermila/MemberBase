@@ -113,6 +113,11 @@
               data-confirm="Resetovat dvoufázové ověření? Ověřte si nejdřív totožnost osoby jinou cestou (telefonem, osobně).">
           {{ csrf() }}<button class="btn btn-sm btn-outline-danger">Resetovat dvoufázové ověření</button></form>
         {% endif %}
+        {% if config.DEBUG and me.is_admin and person.status == 'active' and person.id != me.person.id %}
+        <form method="post" action="{{ url_for('members.login_as', member_id=person.id) }}"
+              data-confirm="Přihlásit se jako {{ person.name }}? Vývojářský nástroj, dostupný jen v DEV.">
+          {{ csrf() }}<button class="btn btn-sm btn-outline-dark">Přihlásit se jako tento uživatel (DEV)</button></form>
+        {% endif %}
       </div>
     </div>
     {% endif %}

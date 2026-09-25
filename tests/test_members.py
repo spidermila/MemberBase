@@ -484,6 +484,54 @@ def test_mfa_reset_failure(client, world, admin, kc, sent):
     assert "Dvoufázové ověření se nepodařilo resetovat" in page and sent == []
 
 
+def test_login_as_button_shown_only_in_debug(client, app, world, admin):
+    person = world.person(world.unit())
+    login(client, admin)
+    assert "Přihlásit se jako tento uživatel" not in text(client.get(f"/members/{person.id}"))
+    app.config["DEBUG"] = True
+    assert "Přihlásit se jako tento uživatel" in text(client.get(f"/members/{person.id}"))
+
+
+def test_login_as_requires_debug(client, app, world, admin):
+    person = world.person(world.unit())
+    login(client, admin)
+    assert client.post(f"/members/{person.id}/login-as").status_code == 404
+
+
+def test_login_as_requires_admin(client, app, world):
+    app.config["DEBUG"] = True
+    person = world.person(world.unit())
+    login(client, world.person(world.unit()))
+    assert client.post(f"/members/{person.id}/login-as").status_code == 404
+
+
+def test_login_as_rejects_self_and_inactive_person(client, app, world, admin):
+    app.config["DEBUG"] = True
+    invited = world.person(world.unit(), status="invited")
+    login(client, admin)
+    assert client.post(f"/members/{admin.id}/login-as").status_code == 404
+    assert client.post(f"/members/{invited.id}/login-as").status_code == 404
+
+
+def test_login_as_switches_session(client, app, world, admin):
+    app.config["DEBUG"] = True
+    person = world.person(world.unit())
+    login(client, admin)
+    resp = client.post(f"/members/{person.id}/login-as", follow_redirects=True)
+    assert person.name in text(resp)
+    with client.session_transaction() as sess:
+        assert sess["member_id"] == person.id
+        assert sess["id_token"] == ""
+
+
+def test_login_as_requires_recent_login(client, app, world, admin):
+    app.config["DEBUG"] = True
+    person = world.person(world.unit())
+    login(client, admin, auth_time=time.time() - 3600)
+    resp = client.post(f"/members/{person.id}/login-as")
+    assert resp.headers["Location"].startswith("/login?next=") and "reauth=1" in resp.headers["Location"]
+
+
 def test_person_history(client, world, admin):
     person = world.person(world.unit(), "Historie Osoby", roles=["medcover:member"])
     people.update_person(person, {"phone": "600600600"}, admin.dn, person.csn)
