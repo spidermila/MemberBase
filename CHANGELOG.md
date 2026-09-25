@@ -16,6 +16,7 @@ All notable changes to MemberBase are documented here. The format follows
 
 ### Changed
 - New people start with status `new` („Nepozvaný“) and become `invited` („Pozvaný“) only when an invitation is sent. Keycloak does not see `new` people, so they cannot log in or reset a password, and the access rules deny them everything like other non-active people. (#3)
+- The `district-coordinator` role is displayed as "OS koordinátor" instead of "Okresní koordinátor".
 
 ### Fixed
 - Keycloak realm: logging out of MedCover returns to MedCover's login page instead of stopping at "Invalid redirect uri" (the `medcover` client now allows `${MEDCOVER_URL}/auth/login` after logout). (#5)
