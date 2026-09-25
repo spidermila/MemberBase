@@ -17,6 +17,7 @@ All notable changes to MemberBase are documented here. The format follows
 - Requests („Žádosti“): a Chair asks to move one of their people to another Místní skupina, and that Místní skupina's Chair approves or rejects. A Chair or Admin asks to see named people of other Místní skupiny (typed names, a level and an optional end date), with one request per Místní skupina. Its Chair matches each name to a member (an exact match ignoring case and accents is preselected) or skips it. Deciders and requesters are emailed. MemberBase's service account carries out approved requests after re-checking them. The requester is whoever filed the request (the access rules make them name themselves); a request's status only moves forward, and nobody decides their own.
 - Grants for a single person (`cn=readers-<level>` under the person entry), created by approved access requests and listed and revocable on the „Sdílení údajů“ page.
 - The member list and the „Pozvánky“ page sort by any column when its header is clicked.
+- The member list has a „Zrušit filtry“ button that clears the search and all filters in one click.
 
 ### Changed
 - New people start with status `new` („Nepozvaný“) and become `invited` („Pozvaný“) only when an invitation is sent. Keycloak does not see `new` people, so they cannot log in or reset a password, and the access rules deny them everything like other non-active people. (#3)

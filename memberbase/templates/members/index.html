@@ -32,6 +32,11 @@
   {% endif %}
   {% if archived %}<input type="hidden" name="archived" value="1">{% endif %}
   <div class="col-auto"><button class="btn btn-outline-secondary">Filtrovat</button></div>
+  {% if q or unit or role_filter %}
+  <div class="col-auto">
+    <a class="btn btn-outline-secondary" href="{{ url_for('members.index', archived='1' if archived else None) }}">Zrušit filtry</a>
+  </div>
+  {% endif %}
   <div class="col-auto ms-auto">
     <a class="btn btn-sm {{ 'btn-secondary' if archived else 'btn-outline-secondary' }}"
        href="{{ url_for('members.index', archived=None if archived else '1') }}">{{ 'Zobrazit současné' if archived else 'Archivovaní' }}</a>
