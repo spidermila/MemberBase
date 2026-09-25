@@ -16,6 +16,7 @@ All notable changes to MemberBase are documented here. The format follows
 - MS Chair („Předseda MS“): an Admin appoints Chairs of a Místní skupina (`cn=chair` under it) in the person's role form. A Chair creates, edits, invites, activates, deactivates and archives the people of their own Místní skupina and manages their MedCover qualifications. The directory enforces the scope. Chairs cannot change people who hold a privileged role (MemberBase Admin or OS koordinátor, MedCover admin or coordinator) or another Chair; only Admins can.
 - Requests („Žádosti“): a Chair asks to move one of their people to another Místní skupina, and that Místní skupina's Chair approves or rejects. A Chair or Admin asks to see named people of other Místní skupiny (typed names, a level and an optional end date), with one request per Místní skupina. Its Chair matches each name to a member (an exact match ignoring case and accents is preselected) or skips it. Deciders and requesters are emailed. MemberBase's service account carries out approved requests after re-checking them. The requester is whoever filed the request (the access rules make them name themselves); a request's status only moves forward, and nobody decides their own.
 - Grants for a single person (`cn=readers-<level>` under the person entry), created by approved access requests and listed and revocable on the „Sdílení údajů“ page.
+- The member list and the „Pozvánky“ page sort by any column when its header is clicked.
 
 ### Changed
 - New people start with status `new` („Nepozvaný“) and become `invited` („Pozvaný“) only when an invitation is sent. Keycloak does not see `new` people, so they cannot log in or reset a password, and the access rules deny them everything like other non-active people. (#3)
@@ -30,6 +31,7 @@ All notable changes to MemberBase are documented here. The format follows
 ### Fixed
 - Keycloak realm: logging out of MedCover returns to MedCover's login page instead of stopping at "Invalid redirect uri" (the `medcover` client now allows `${MEDCOVER_URL}/auth/login` after logout). (#5)
 - Keycloak login theme: after a password reset opened from the email in a new session, the „Účet byl aktualizován“ page links back to the application instead of ending there (a small `info.ftl` override; Keycloak itself hides the link there). The `medcover` client gets a base URL for that link. (#5)
+- Every date and time in the UI is shown in Prague time; invitation, grant and request dates were shown in UTC, and an expiry date showed as the next day. An expiry date entered in a form now ends at midnight Prague time instead of UTC, i.e. one or two hours earlier.
 
 ### Security
 - `olcAddContentAcl` is on: whoever adds an entry needs add access to every attribute in it. Nobody may set `authzTo`/`authzFrom` outside `ou=services`.

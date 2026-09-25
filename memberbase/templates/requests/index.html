@@ -9,7 +9,7 @@
     <tbody>
       {% for r in reqs %}
       <tr>
-        <td class="text-nowrap"><a href="{{ url_for('requests.detail', request_id=r.id) }}">{{ r.created_at.strftime('%d. %m. %Y') if r.created_at else '—' }}</a></td>
+        <td class="text-nowrap"><a href="{{ url_for('requests.detail', request_id=r.id) }}">{{ r.created_at|local if r.created_at else '—' }}</a></td>
         <td>{{ r.type_label }}</td>
         <td>{% if r.type == 'move' %}{{ r.move_subject_name }}{% else %}{{ r.access_names|join(', ') }}{% endif %}</td>
         <td>{{ r.unit.name }}</td>

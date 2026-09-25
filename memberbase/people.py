@@ -23,6 +23,7 @@ STATUSES = {
     "inactive": "Neaktivní",
     "former": "Archivovaný",
 }
+STATUS_ORDER = {status: i for i, status in enumerate(STATUSES)}
 LEVELS = {"basic": "Jméno", "contact": "Jméno a kontakt", "extended": "Rozšířené údaje"}
 # Everyone not archived.
 CURRENT_STATUSES = ["new", "invited", "active", "inactive"]
@@ -74,12 +75,6 @@ def parse_ldap_time(value: str) -> datetime | None:
         except ValueError:
             continue
     return None
-
-
-def local_time(value: str) -> datetime | None:
-    """GeneralizedTime → datetime in Prague, for display."""
-    moment = parse_ldap_time(value)
-    return moment.astimezone(PRAGUE) if moment else None
 
 
 def split_name(full_name: str) -> tuple[str, str]:

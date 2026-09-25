@@ -8,7 +8,7 @@
     <dl class="row mb-0">
       <dt class="col-sm-4">Stav</dt><dd class="col-sm-8">{{ req.status_label }}</dd>
       <dt class="col-sm-4">Žadatel</dt><dd class="col-sm-8">{{ req.requested_by_name }}</dd>
-      <dt class="col-sm-4">Podáno</dt><dd class="col-sm-8">{{ req.created_at.strftime('%d. %m. %Y') if req.created_at else '—' }}</dd>
+      <dt class="col-sm-4">Podáno</dt><dd class="col-sm-8">{{ req.created_at|local if req.created_at else '—' }}</dd>
       {% if req.type == 'move' %}
       <dt class="col-sm-4">Koho</dt><dd class="col-sm-8">{{ req.move_subject_name }}</dd>
       <dt class="col-sm-4">Odkud</dt><dd class="col-sm-8">{{ req.move_from.name if req.move_from else '—' }}</dd>
@@ -16,11 +16,11 @@
       {% else %}
       <dt class="col-sm-4">Čí údaje</dt><dd class="col-sm-8">{{ req.unit.name }}</dd>
       <dt class="col-sm-4">Rozsah</dt><dd class="col-sm-8">{{ levels.get(req.access_level, req.access_level) }}</dd>
-      <dt class="col-sm-4">Platnost do</dt><dd class="col-sm-8">{{ req.expires_at.strftime('%d. %m. %Y') if req.expires_at else 'trvale' }}</dd>
+      <dt class="col-sm-4">Platnost do</dt><dd class="col-sm-8">{{ req.expires_at|local if req.expires_at else 'trvale' }}</dd>
       {% endif %}
       <dt class="col-sm-4">{{ 'Poznámka' if req.type == 'move' else 'Účel' }}</dt><dd class="col-sm-8">{{ req.note or '—' }}</dd>
       {% if req.decided_at %}
-      <dt class="col-sm-4">Rozhodnuto</dt><dd class="col-sm-8">{{ req.decided_at.strftime('%d. %m. %Y') }}</dd>
+      <dt class="col-sm-4">Rozhodnuto</dt><dd class="col-sm-8">{{ req.decided_at|local }}</dd>
       {% endif %}
     </dl>
   </div>

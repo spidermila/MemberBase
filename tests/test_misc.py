@@ -138,13 +138,22 @@ def test_forms():
     assert forms.clean_phone("") == ("", None)
     assert forms.clean_phone("00420777123456") == ("00420777123456", None)
     assert forms.clean_date("") == (None, None)
-    assert forms.clean_date("2030-01-31")[0] == datetime(2030, 1, 31, 23, 59, 59, tzinfo=UTC)
+    assert forms.clean_date("2030-01-31")[0] == datetime(2030, 1, 31, 22, 59, 59, tzinfo=UTC)
+    assert forms.clean_date("2030-07-31")[0] == datetime(2030, 7, 31, 21, 59, 59, tzinfo=UTC)
 
 
 def test_split_name_and_times():
     assert people.split_name("Cher") == ("", "Cher")
     assert people.split_name("Jan Petr Novák") == ("Jan Petr", "Novák")
     assert people.parse_ldap_time("") is None
+
+
+def test_ui_times_are_prague_time(app):
+    local = app.jinja_env.filters["local"]
+    late = datetime(2030, 1, 31, 23, 30, tzinfo=UTC)
+    assert local(late) == "01. 02. 2030"
+    assert local(late, "%d. %m. %Y %H:%M") == "01. 02. 2030 00:30"
+    assert local(forms.clean_date("2030-07-31")[0]) == "31. 07. 2030"
 
 
 # ── Keycloak client ──────────────────────────────────────────────────────────

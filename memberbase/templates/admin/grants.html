@@ -13,7 +13,7 @@
         <td>{{ names.get(g.grantee, '?') }}</td>
         <td>{{ owner_names.get(g.target_owner_dn.lower(), '?') }}</td>
         <td>{{ levels.get(g.level, g.level) }}</td>
-        <td>{{ g.expires_at.strftime('%d. %m. %Y') if g.expires_at else 'trvale' }}</td>
+        <td>{{ g.expires_at|local if g.expires_at else 'trvale' }}</td>
         <td>{{ g.description }}</td>
         <td class="text-end">
           <form method="post" action="{{ url_for('admin.revoke_grant', grant_id=g.id) }}" data-confirm="Zrušit toto sdílení?">

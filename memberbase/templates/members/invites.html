@@ -19,7 +19,7 @@
   <table class="table align-middle">
     <thead class="table-light"><tr>
       <th class="col-check"><input class="form-check-input" type="checkbox" id="selectAll" aria-label="Vybrat vše"></th>
-      <th>Jméno</th><th>E-mail</th><th>Místní skupina</th><th>Stav</th><th></th>
+      <th data-sort aria-sort="ascending">Jméno</th><th data-sort>E-mail</th><th data-sort>Místní skupina</th><th data-sort>Stav</th><th></th>
     </tr></thead>
     <tbody>
     {% for p in people %}
@@ -28,7 +28,7 @@
         <td><a href="{{ url_for('members.detail', member_id=p.id) }}">{{ p.name }}</a></td>
         <td>{{ p.email }}</td>
         <td>{{ p.unit.name if p.unit else '' }}</td>
-        <td>{{ status_badge(p) }}{% if p.status == 'invited' and p.status_changed_at %} <span class="small text-body-secondary">{{ p.status_changed_at.strftime('%d. %m. %Y') }}</span>{% endif %}</td>
+        <td data-sort="{{ status_order.get(p.status, '') }} {{ p.status_changed_at.isoformat() if p.status == 'invited' and p.status_changed_at }}">{{ status_badge(p) }}{% if p.status == 'invited' and p.status_changed_at %} <span class="small text-body-secondary">{{ p.status_changed_at|local }}</span>{% endif %}</td>
         <td class="text-end">
           <div class="d-inline-flex gap-1">
             <form method="post" action="{{ url_for('members.invite', member_id=p.id) }}">{{ csrf() }}
