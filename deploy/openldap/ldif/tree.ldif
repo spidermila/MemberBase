@@ -95,7 +95,7 @@ member: uid={{ADMIN_ID}},ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
 dn: cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}
 objectClass: crcGroup
 cn: district-coordinator
-description: District Coordinator
+description: OS koordinátor
 
 dn: ou=services,{{BASE_DN}}
 objectClass: organizationalUnit

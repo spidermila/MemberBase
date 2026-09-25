@@ -230,7 +230,7 @@ def test_history_labels(app, admin):
 def test_permissions_page(client, admin, app):
     login(client, admin)
     page = text(client.get("/permissions"))
-    assert "Okresní koordinátor" in page and "MedCover zatím mapování rolí nevystavuje." in page
+    assert "OS koordinátor" in page and "MedCover zatím mapování rolí nevystavuje." in page
 
     app.config["MEDCOVER_ROLES_URL"] = "http://medcover.test/api/roles"
     responses.post(f"{KC}/realms/crc/protocol/openid-connect/token", json={"access_token": "svc"})

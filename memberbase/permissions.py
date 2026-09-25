@@ -5,7 +5,7 @@ access rules enforce the same split independently."""
 ADMIN = "admin"
 DISTRICT_COORDINATOR = "district-coordinator"
 
-ROLE_LABELS = {ADMIN: "Admin", DISTRICT_COORDINATOR: "Okresní koordinátor"}
+ROLE_LABELS = {ADMIN: "Admin", DISTRICT_COORDINATOR: "OS koordinátor"}
 
 PERMISSION_LABELS = {
     "member.view_all": "Vidí všechny místní skupiny a externí uživatele",
