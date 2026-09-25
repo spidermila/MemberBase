@@ -191,7 +191,7 @@ def changes(as_dn: str, person: people.Person | None = None) -> list[Change]:
     labels = Labels(as_dn)
     return [
         Change(
-            when=people.local_time(e.first("reqStart")),
+            when=people.parse_ldap_time(e.first("reqStart")),
             actor=labels.dn(e.first("reqAuthzID")),
             action=TYPES.get(e.first("reqType"), e.first("reqType")),
             target=labels.dn(e.first("reqDN")),

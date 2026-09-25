@@ -1,7 +1,9 @@
 """Validation of submitted form values (CSRF is checked globally)."""
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
+
+from memberbase.people import PRAGUE
 
 # Phone: 9 bare digits, or +/00 followed by 10-15 digits (spaces ignored).
 _PHONE_RE = re.compile(r"^\d{9}$|^(\+|00)\d{10,15}$")
@@ -39,11 +41,11 @@ def clean_phone(raw: str) -> tuple[str, str | None]:
 
 
 def clean_date(raw: str) -> tuple[datetime | None, str | None]:
-    """Optional date (YYYY-MM-DD) → end of that day, UTC."""
+    """Optional date (YYYY-MM-DD) → end of that day in Prague, as UTC."""
     if not raw.strip():
         return None, None
     try:
         day = datetime.strptime(raw.strip(), "%Y-%m-%d")
     except ValueError:
         return None, "Zadejte platné datum."
-    return day.replace(hour=23, minute=59, second=59, tzinfo=UTC), None
+    return datetime.combine(day, time(23, 59, 59), PRAGUE).astimezone(UTC), None

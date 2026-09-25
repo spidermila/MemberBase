@@ -69,9 +69,9 @@
     <thead class="table-light">
       <tr>
         {% if batch %}<th class="col-check"><input class="form-check-input" type="checkbox" id="selectAll" aria-label="Vybrat vše"></th>{% endif %}
-        <th>Jméno</th><th>Místní skupina</th><th class="d-none d-md-table-cell">E-mail</th>
-        <th class="d-none d-md-table-cell">Telefon</th><th>Stav</th>
-        {% if can_see_roles %}<th class="d-none d-lg-table-cell">Role</th>{% endif %}
+        <th data-sort aria-sort="ascending">Jméno</th><th data-sort>Místní skupina</th><th class="d-none d-md-table-cell" data-sort>E-mail</th>
+        <th class="d-none d-md-table-cell" data-sort>Telefon</th><th data-sort>Stav</th>
+        {% if can_see_roles %}<th class="d-none d-lg-table-cell" data-sort>Role</th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -82,7 +82,7 @@
         <td>{{ p.unit.name if p.unit else '' }}</td>
         <td class="d-none d-md-table-cell">{{ p.email }}</td>
         <td class="d-none d-md-table-cell">{{ p.phone }}</td>
-        <td>{{ status_badge(p) }}</td>
+        <td data-sort="{{ status_order.get(p.status, '') }}">{{ status_badge(p) }}</td>
         {% if can_see_roles %}
         <td class="d-none d-lg-table-cell small">{% for r in roles if r.key in p.roles %}{{ apps[r.app] }}: {{ r.label }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
         {% endif %}

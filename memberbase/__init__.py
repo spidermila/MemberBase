@@ -1,5 +1,6 @@
 """MemberBase („Evidence členů“): administration of the member directory."""
 
+from datetime import datetime
 from typing import Any
 
 from flask import Flask, g, render_template
@@ -28,9 +29,19 @@ def create_app(overrides: dict[str, Any] | None = None) -> Flask:
     cli.init_app(app)
     app.teardown_appcontext(directory.close)
 
+    @app.template_filter("local")
+    def _local_time(moment: datetime, fmt: str = "%d. %m. %Y") -> str:
+        """Every time the UI shows is Prague time; the directory stores UTC."""
+        return moment.astimezone(people.PRAGUE).strftime(fmt)
+
     @app.context_processor
     def _globals() -> dict[str, Any]:
-        ctx: dict[str, Any] = {"me": g.get("me"), "git_commit": app.config["GIT_COMMIT"], "apps": people.APPS}
+        ctx: dict[str, Any] = {
+            "me": g.get("me"),
+            "git_commit": app.config["GIT_COMMIT"],
+            "apps": people.APPS,
+            "status_order": people.STATUS_ORDER,
+        }
         if app.debug:
             # Dev-only shortcuts to the other stack services; never shown when
             # running from the production image (no --debug there).

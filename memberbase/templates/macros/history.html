@@ -5,7 +5,7 @@
     <tbody>
     {% for c in changes %}
       <tr>
-        <td class="text-nowrap">{{ c.when.strftime('%d. %m. %Y %H:%M') if c.when }}</td>
+        <td class="text-nowrap">{{ c.when|local('%d. %m. %Y %H:%M') if c.when }}</td>
         <td>{{ c.actor }}</td>
         <td>{{ c.action }}</td>
         <td>{{ c.target }}</td>

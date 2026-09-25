@@ -34,3 +34,7 @@
 .small-list { font-size: 0.875rem; margin: 0; padding-left: 1rem; }
 [data-bs-theme="dark"] .table-light { --bs-table-bg: var(--bs-tertiary-bg); --bs-table-color: var(--bs-body-color); }
 .maxw-form { max-width: 640px; }
+.sort-button { all: unset; display: block; width: 100%; cursor: pointer; }
+.sort-button:focus-visible { outline: 2px solid var(--bs-focus-ring-color); }
+th[aria-sort="ascending"] .sort-button::after { content: " ▲" / ""; }
+th[aria-sort="descending"] .sort-button::after { content: " ▼" / ""; }

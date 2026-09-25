@@ -88,3 +88,70 @@ document.addEventListener("submit", function (event) {
     });
   });
 })();
+
+// Sort a table by clicking a header: <th data-sort>. A cell's data-sort
+// value, if any, sorts instead of its text; empty cells go last. The last
+// sort is kept for this page and tab, so it survives the redirect after a
+// row action. aria-sort="ascending" on a header marks the initial order.
+(function () {
+  var headers = document.querySelectorAll("th[data-sort]");
+  if (!headers.length) {
+    return;
+  }
+  var collator = new Intl.Collator("cs", { numeric: true, sensitivity: "base" });
+  var storageKey = "sort:" + location.pathname;
+  function sort(th, dir) {
+    var table = th.closest("table");
+    var body = table.tBodies[0];
+    var index = th.cellIndex;
+    table.querySelectorAll("th[aria-sort]").forEach(function (other) {
+      other.removeAttribute("aria-sort");
+    });
+    th.setAttribute("aria-sort", dir === 1 ? "ascending" : "descending");
+    Array.prototype.map.call(body.rows, function (row) {
+      var cell = row.cells[index];
+      var key = !cell ? "" : cell.dataset.sort !== undefined ? cell.dataset.sort : cell.textContent;
+      return { row: row, key: key.trim() };
+    })
+      .sort(function (a, b) {
+        return (a.key === "") - (b.key === "") || dir * collator.compare(a.key, b.key);
+      })
+      .forEach(function (item) { body.appendChild(item.row); });
+  }
+  headers.forEach(function (th, i) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "sort-button";
+    while (th.firstChild) {
+      button.appendChild(th.firstChild);
+    }
+    th.appendChild(button);
+    button.addEventListener("click", function () {
+      var dir = th.getAttribute("aria-sort") === "ascending" ? -1 : 1;
+      sort(th, dir);
+      try {
+        sessionStorage.setItem(storageKey, i + ":" + dir);
+      } catch (e) {
+        // Storage blocked: the sort just isn't remembered.
+      }
+    });
+  });
+  var saved = null;
+  try {
+    saved = sessionStorage.getItem(storageKey);
+  } catch (e) {
+    // Storage blocked: start from the server's order.
+  }
+  var parts = (saved || "").split(":");
+  var th = headers[parts[0]];
+  // A column hidden at this screen width would sort the list invisibly.
+  if (th && th.offsetParent !== null) {
+    sort(th, Number(parts[1]) === -1 ? -1 : 1);
+  } else {
+    // Re-sort the server's order here so both directions use the same collation.
+    th = document.querySelector("th[data-sort][aria-sort=ascending]");
+    if (th) {
+      sort(th, 1);
+    }
+  }
+})();
