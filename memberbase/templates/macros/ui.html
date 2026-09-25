@@ -6,3 +6,13 @@
 {% macro csrf() -%}
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 {%- endmacro %}
+
+{% macro cert_badge(cert) -%}
+  {%- if cert.state == 'expired' -%}<span class="badge bg-danger">Prošlé</span>
+  {%- elif cert.state == 'expiring' -%}<span class="badge bg-warning text-black">Brzy vyprší</span>
+  {%- else -%}<span class="badge bg-success">Platné</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro cert_dates(cert) -%}
+  {{ cert.issued.strftime('%d. %m. %Y') if cert.issued else '—' }} – {{ cert.expires.strftime('%d. %m. %Y') if cert.expires else 'bez omezení' }}
+{%- endmacro %}

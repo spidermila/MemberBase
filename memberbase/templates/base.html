@@ -27,6 +27,7 @@
           {% if me.manages_people %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('members.invites') }}">Pozvánky</a></li>
           {% endif %}
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('members.certificates') }}">Osvědčení</a></li>
           {% if me.can('request.create') %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('requests.index') }}">Žádosti</a></li>
           {% endif %}

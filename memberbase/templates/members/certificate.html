@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import csrf %}
+{% block title %}Osvědčení – {{ person.name }} – Evidence členů{% endblock %}
+{% block content %}
+<h2>{{ 'Upravit osvědčení' if cert else 'Nové osvědčení' }}</h2>
+<p class="text-body-secondary">{{ person.name }}{% if person.unit %} · {{ person.unit.name }}{% endif %}</p>
+{% set back = request.values.get('back', '') %}
+<form method="post" class="card maxw-form">
+  {{ csrf() }}
+  <input type="hidden" name="back" value="{{ back }}">
+  {% if cert %}<input type="hidden" name="csn" value="{{ cert.csn }}">{% endif %}
+  <div class="card-body">
+    <div class="mb-3">
+      <label class="form-label" for="name">Název</label>
+      <input class="form-control" id="name" name="name" required maxlength="200"
+             value="{{ form.get('name', cert.name if cert else '') }}" placeholder="např. Zdravotník zotavovacích akcí">
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="issuer">Vydal</label>
+      <input class="form-control" id="issuer" name="issuer" required maxlength="200"
+             value="{{ form.get('issuer', cert.issuer if cert else '') }}" placeholder="např. Úřad ČČK">
+    </div>
+    <div class="row g-3 mb-3">
+      <div class="col-sm-6">
+        <label class="form-label" for="issued">Datum vydání</label>
+        <input class="form-control" id="issued" name="issued" type="date" required
+               value="{{ form.get('issued', cert.issued.isoformat() if cert and cert.issued else '') }}">
+      </div>
+      <div class="col-sm-6">
+        <label class="form-label" for="expires">Platnost do</label>
+        <input class="form-control" id="expires" name="expires" type="date"
+               value="{{ form.get('expires', cert.expires.isoformat() if cert and cert.expires else '') }}">
+        <div class="form-text">Prázdné = platnost bez omezení.</div>
+      </div>
+    </div>
+    <button class="btn btn-danger">Uložit</button>
+    <a class="btn btn-link" href="{{ url_for('members.certificates') if back == 'certificates' else url_for('members.detail', member_id=person.id) }}">Zpět</a>
+  </div>
+</form>
+{% endblock %}

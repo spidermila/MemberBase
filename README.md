@@ -31,6 +31,9 @@ UI is Czech („Evidence členů“); code and docs are English.
   branch or of one person (a person, or a branch's `cn=members` group).
   District Coordinators read everything, Admins change everything, MS Chairs
   (`cn=chair` of a branch) change the people of their own branch.
+- Certificates („Osvědčení“) are `crcCertificate` entries under the person.
+  Only the person, their Chairs, District Coordinators, Admins and holders of
+  a `records` grant read them; the rest of the branch does not.
 - Requests: moves between branches and access to named people are requested,
   filed under the deciding branch (`ou=requests`) and decided by its Chairs.
   MemberBase's own account carries out an approved request, since neither

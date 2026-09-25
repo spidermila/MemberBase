@@ -1,5 +1,5 @@
 """Directory data model: people, Místní skupiny, app roles, qualifications,
-visibility grants. Functions taking `as_dn` run as that person (the directory
+certificates, visibility grants. Functions taking `as_dn` run as that person (the directory
 decides what they may see or change); `as_dn=None` means MemberBase's own
 service account and is used only where the design says so (login lookup,
 activation of invited people, the grant and consistency jobs)."""
@@ -8,7 +8,7 @@ import unicodedata
 import uuid
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import ldap
@@ -24,7 +24,8 @@ STATUSES = {
     "former": "Archivovaný",
 }
 STATUS_ORDER = {status: i for i, status in enumerate(STATUSES)}
-LEVELS = {"basic": "Jméno", "contact": "Jméno a kontakt", "extended": "Rozšířené údaje"}
+# "records" is not above "extended": it shows the name and certificates only.
+LEVELS = {"basic": "Jméno", "contact": "Jméno a kontakt", "extended": "Rozšířené údaje", "records": "Jméno a osvědčení"}
 # Everyone not archived.
 CURRENT_STATUSES = ["new", "invited", "active", "inactive"]
 APPS = {"medcover": "MedCover", "memberbase": "Evidence členů"}
@@ -575,6 +576,97 @@ def set_holdings(person: Person, wanted: set[str], as_dn: str) -> tuple[set[str]
     return wanted - set(current), set(current) - wanted
 
 
+# ── Certificates („Osvědčení“): certifications, training, diplomas ──────────
+
+EXPIRING_DAYS = 90
+
+
+@dataclass
+class Certificate:
+    dn: str
+    id: str
+    name: str
+    issuer: str
+    issued: date | None
+    expires: date | None  # None: does not expire
+    csn: str
+
+    @property
+    def person_dn(self) -> str:
+        return self.dn.split(",", 1)[1]
+
+    @property
+    def state(self) -> str:
+        """valid | expiring | expired; valid through the expiry day (Prague)."""
+        today = datetime.now(PRAGUE).date()
+        if self.expires is None or self.expires >= today + timedelta(days=EXPIRING_DAYS):
+            return "valid"
+        return "expired" if self.expires < today else "expiring"
+
+
+def _day(value: str) -> date | None:
+    moment = parse_ldap_time(value)
+    return moment.date() if moment else None
+
+
+def list_certificates(as_dn: str, base_dn: str | None = None, scope: int = ldap.SCOPE_SUBTREE) -> list[Certificate]:
+    """Certificates under `base_dn` (default: everywhere) that `as_dn` may
+    read, newest first."""
+    attrs = ["crcCertificateId", "cn", "crcIssuer", "crcValidFrom", "crcValidUntil"]
+    found = d.search(base_dn or d.base_dn(), "(objectClass=crcCertificate)", attrs, scope, as_dn)
+    certs = [
+        Certificate(
+            e.dn,
+            e.first("crcCertificateId"),
+            e.first("cn"),
+            e.first("crcIssuer"),
+            _day(e.first("crcValidFrom")),
+            _day(e.first("crcValidUntil")),
+            e.first("entryCSN"),
+        )
+        for e in found
+    ]
+    certs.sort(key=lambda c: c.issued or date.min, reverse=True)
+    return certs
+
+
+def certificates_of(person: Person, as_dn: str) -> list[Certificate]:
+    return list_certificates(as_dn, person.dn, ldap.SCOPE_ONELEVEL)
+
+
+def save_certificate(
+    person: Person,
+    cert: Certificate | None,
+    name: str,
+    issuer: str,
+    issued: date,
+    expires: date | None,
+    as_dn: str,
+    csn: str = "",
+) -> None:
+    """Create a certificate of `person`, or change `cert`. `csn` is the
+    entryCSN the form was built from; a concurrent change raises StaleEntry."""
+    attrs = {
+        "cn": [name],
+        "crcIssuer": [issuer] if issuer else [],
+        "crcValidFrom": [f"{issued:%Y%m%d}000000Z"],
+        "crcValidUntil": [f"{expires:%Y%m%d}000000Z"] if expires else [],
+    }
+    if cert is None:
+        cert_id = new_id()
+        d.add(
+            f"crcCertificateId={cert_id},{person.dn}",
+            {"objectClass": ["crcCertificate"], "crcCertificateId": [cert_id]} | attrs,
+            as_dn,
+        )
+    else:
+        d.modify(cert.dn, attrs, as_dn, csn=csn)
+
+
+def delete_certificate(cert: Certificate, as_dn: str) -> None:
+    d.delete(cert.dn, as_dn)
+
+
 # ── Visibility grants ────────────────────────────────────────────────────────
 
 
@@ -693,16 +785,25 @@ def repair_members() -> int:
     """Scheduled job (service account): make every cn=members group equal to
     the people actually inside the Místní skupina, and take roles and
     chairing away from archived people (an archiving Chair cannot), and add
-    missing cn=chair and ou=requests. Returns entries fixed."""
+    missing cn=chair, readers groups and ou=requests. Returns entries fixed."""
     fixed = 0
+    all_units = list_units(None, include_external=True)
+    units = [u for u in all_units if not u.is_external]
+    # Místní skupiny (and external users) from before a readers level existed.
+    readers = {e.dn.lower() for e in d.search(d.base_dn(), "(&(objectClass=crcGroup)(cn=readers-*))", ["cn"])}
+    for unit in all_units:
+        for level in LEVELS:
+            if unit.readers_dn(level).lower() not in readers:
+                d.add(unit.readers_dn(level), _group(f"readers-{level}"), None)
+                fixed += 1
     former = {e.dn.lower() for e in d.search(d.base_dn(), "(&(objectClass=crcMember)(crcMemberStatus=former))", ["cn"])}
     groups = {r.dn: r.members for r in list_roles(None, with_members=True)}
-    groups |= {u.chair_dn: chair_members(u, None) for u in list_units(None)}
+    groups |= {u.chair_dn: chair_members(u, None) for u in units}
     for dn, members in groups.items():
         if stale := sorted(members & former):
             d.delete_values(dn, "member", stale, None)
             fixed += 1
-    for unit in list_units(None):
+    for unit in units:
         # Místní skupiny created before Chairs and requests existed.
         if d.get(unit.chair_dn, ["cn"]) is None:
             d.add(unit.chair_dn, _group("chair"), None)

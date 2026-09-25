@@ -36,7 +36,12 @@ def profile() -> str | Response:
     held = [quals[q].name for q in people.holdings_of(person, me().dn) if q in quals]
     roles = [r for r in people.list_roles(me().dn) if r.key in me().roles]
     return render_template(
-        "main/profile.html", person=person, held=sorted(held, key=people.sort_key), roles=roles, kc=auth.KC_ACTIONS
+        "main/profile.html",
+        person=person,
+        held=sorted(held, key=people.sort_key),
+        certs=people.certificates_of(person, me().dn),
+        roles=roles,
+        kc=auth.KC_ACTIONS,
     )
 
 

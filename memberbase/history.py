@@ -39,6 +39,9 @@ ATTR_LABELS = {
     "crcAccessSubject": "Zpřístupněné osoby",
     "crcAccessLevel": "Rozsah",
     "crcMoveSubjectName": "Koho přesunout",
+    "crcIssuer": "Vydal",
+    "crcValidFrom": "Platnost od",
+    "crcValidUntil": "Platnost do",
     "userPassword": "Heslo",
 }
 # Bookkeeping attributes, or ones derived from those shown.
@@ -58,6 +61,7 @@ HIDDEN = {
     "crcMemberId",
     "crcUnitId",
     "crcHoldingId",
+    "crcCertificateId",
     "crcGrantId",
     "crcQualificationId",
     "crcRequestId",
@@ -110,6 +114,8 @@ class Labels:
         rdn = key.split(",", 1)[0]
         if rdn.startswith("crcholdingid=") and "," in key:
             return f"kvalifikace – {self.dn(key.split(',', 1)[1])}"
+        if rdn.startswith("crccertificateid=") and "," in key:
+            return f"osvědčení – {self.dn(key.split(',', 1)[1])}"
         if rdn.startswith("crcgrantid="):
             return "sdílení údajů"
         if rdn.startswith("crcrequestid="):
@@ -143,6 +149,9 @@ class Labels:
             return people.LEVELS.get(value, value)
         if attr == "crcRequestStatus":
             return approvals.STATUSES.get(value, value)
+        if attr in {"crcValidFrom", "crcValidUntil"}:
+            day = people.parse_ldap_time(value)
+            return day.strftime("%d. %m. %Y") if day else value
         if attr == "crcCanBeRp":
             return "ano" if value == "TRUE" else "ne"
         return value
@@ -158,13 +167,16 @@ def _parse_mod(mod: str) -> tuple[str, str, str]:
 
 def _details(entry: d.Entry, labels: Labels) -> list[str]:
     lines = []
+    # A certificate's cn is its title, not a person's name; crcValidFrom is its issue date.
+    cert = entry.first("reqDN").lower().startswith("crccertificateid=")
+    names = ATTR_LABELS | ({"cn": "Název", "crcValidFrom": "Datum vydání"} if cert else {})
     if entry.first("reqType") == "modrdn":
         lines.append(f"do: {labels.dn(entry.first('reqNewSuperior'))}")
     for mod in entry.all("reqMod"):
         attr, op, value = _parse_mod(mod)
         if attr in HIDDEN:
             continue
-        label = ATTR_LABELS.get(attr, attr)
+        label = names.get(attr, attr)
         if entry.first("reqType") == "add":
             lines.append(f"{label}: {labels.value(attr, value)}")
         else:
@@ -173,7 +185,7 @@ def _details(entry: d.Entry, labels: Labels) -> list[str]:
     changed = {_parse_mod(m)[0] for m in entry.all("reqMod")}
     for attr, value in (o for o in old if len(o) == 2):
         if attr in changed and attr not in HIDDEN and entry.first("reqType") == "modify":
-            lines.append(f"{ATTR_LABELS.get(attr, attr)} předtím: {labels.value(attr, value)}")
+            lines.append(f"{names.get(attr, attr)} předtím: {labels.value(attr, value)}")
     return lines
 
 

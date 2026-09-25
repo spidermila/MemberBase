@@ -30,6 +30,10 @@ dn: cn=readers-extended,ou=external,{{BASE_DN}}
 objectClass: crcGroup
 cn: readers-extended
 
+dn: cn=readers-records,ou=external,{{BASE_DN}}
+objectClass: crcGroup
+cn: readers-records
+
 dn: ou=grants,{{BASE_DN}}
 objectClass: organizationalUnit
 ou: grants
@@ -145,6 +149,10 @@ cn: readers-contact
 dn: cn=readers-extended,ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
 objectClass: crcGroup
 cn: readers-extended
+
+dn: cn=readers-records,ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+objectClass: crcGroup
+cn: readers-records
 
 dn: cn=chair,ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
 objectClass: crcGroup
