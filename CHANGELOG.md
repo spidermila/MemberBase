@@ -19,3 +19,4 @@ All notable changes to MemberBase are documented here. The format follows
 
 ### Fixed
 - Keycloak realm: logging out of MedCover returns to MedCover's login page instead of stopping at "Invalid redirect uri" (the `medcover` client now allows `${MEDCOVER_URL}/auth/login` after logout). (#5)
+- Keycloak login theme: after a password reset opened from the email in a new session, the „Účet byl aktualizován“ page links back to the application instead of ending there (a small `info.ftl` override; Keycloak itself hides the link there). The `medcover` client gets a base URL for that link. (#5)
