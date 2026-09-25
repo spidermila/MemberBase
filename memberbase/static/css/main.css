@@ -1,4 +1,32 @@
-/* MemberBase – same red as MedCover's navbar (Bootstrap danger). */
+/* MemberBase – a shade darker than MedCover's plain Bootstrap danger red,
+   so the two apps' navbars are told apart at a glance. Uses Bootstrap's own
+   danger hover/active shades, one step down, to stay within its palette. */
+:root {
+  --bs-danger: #bb2d3b;
+  --bs-danger-rgb: 187, 45, 59;
+}
+.btn-danger {
+  --bs-btn-bg: #bb2d3b;
+  --bs-btn-border-color: #bb2d3b;
+  --bs-btn-hover-bg: #b02a37;
+  --bs-btn-hover-border-color: #a52834;
+  --bs-btn-focus-shadow-rgb: 187, 45, 59;
+  --bs-btn-active-bg: #a52834;
+  --bs-btn-active-border-color: #9c262f;
+  --bs-btn-disabled-bg: #bb2d3b;
+  --bs-btn-disabled-border-color: #bb2d3b;
+}
+
+/* Navbar text – same light colour as MedCover's navbar. */
+:root {
+  --color-navbar-text: rgba(255, 255, 255, 0.90);
+  --color-navbar-text-hover: #ffffff;
+}
+.navbar-dark .nav-link,
+.navbar-dark .navbar-brand { color: var(--color-navbar-text); }
+.navbar-dark .nav-link:hover,
+.navbar-dark .nav-link:focus { color: var(--color-navbar-text-hover); }
+
 .navbar-brand img { border-radius: 4px; }
 .maxw-340 { max-width: 340px; }
 .maxw-200 { max-width: 200px; }
