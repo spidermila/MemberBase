@@ -15,7 +15,7 @@ def test_member_list_shows_own_branch_only(client, world):
     world.person(other, "Bob Seznamový")
     login(client, alice)
     page = text(client.get("/members/"))
-    assert "Anna Seznamová" in page and "Bob Seznamový" not in page
+    assert "Anna Seznamová" in page and "Bob Seznamový" not in page and "Zrušit filtry" not in page
     assert "Hromadn" not in page and 'name="role"' not in page
 
 
@@ -38,6 +38,7 @@ def test_archived_view(client, world, admin):
     assert "Dan Archivovaný" not in text(client.get(f"/members/?unit={unit.id}"))
     page = text(client.get(f"/members/?unit={unit.id}&archived=1"))
     assert "Dan Archivovaný" in page and 'id="batchToolbar"' not in page
+    assert "Zrušit filtry" in page and 'href="/members/?archived=1"' in page
 
 
 def test_search_input_is_escaped(client, admin):
