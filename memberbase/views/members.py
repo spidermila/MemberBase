@@ -1,5 +1,5 @@
 """Členové: list, detail, create, edit, status, move, roles, qualifications,
-invitations and second-factor reset."""
+certificates, invitations and second-factor reset."""
 
 import time
 from collections.abc import Mapping
@@ -45,6 +45,11 @@ def _clean_person(form: Mapping[str, str]) -> tuple[str, str, str, list[str]]:
     email, e2 = forms.clean_email(form.get("email", ""))
     phone, e3 = forms.clean_phone(form.get("phone", ""))
     return name, email, phone, [e for e in (e1, e2, e3) if e]
+
+
+def _protected(person: people.Person) -> bool:
+    """Chairs are not offered what the directory refuses them (privileged people, themselves)."""
+    return me().is_chair_of(person.unit_dn) and not me().is_admin and people.is_privileged(person)
 
 
 def _managed_or_403(member_id: str, permission: str) -> people.Person:
@@ -117,8 +122,7 @@ def create() -> str | Response:
 def detail(member_id: str) -> str:
     person = _person_or_404(member_id)
     unit_dn = person.unit_dn
-    # Chairs are not offered what the directory refuses them (privileged people, themselves).
-    protected = me().is_chair_of(unit_dn) and not me().is_admin and people.is_privileged(person)
+    protected = _protected(person)
     ctx: dict = {
         "person": person,
         "status_actions": STATUS_ACTIONS,
@@ -126,6 +130,8 @@ def detail(member_id: str) -> str:
         "can_edit": me().can_in_unit("member.edit", unit_dn) and not protected,
         "can_status": me().can_in_unit("member.status", unit_dn) and not protected,
         "can_quals": me().can_in_unit("qualification.manage", unit_dn) and not protected,
+        "can_certs": me().can_in_unit("certificate.manage", unit_dn) and not protected,
+        "certs": people.certificates_of(person, me().dn),
         "is_chair": people.is_chair(person, me().dn),
     }
     if me().can("role.assign"):
@@ -255,6 +261,105 @@ def qualifications(member_id: str) -> Response:
     else:
         flash(f"Kvalifikace uloženy (přidáno {len(added)}, odebráno {len(removed)}).", "success")
     return _back(person)
+
+
+# ── Osvědčení ────────────────────────────────────────────────────────────────
+
+CERT_STATES = {"valid": "Platné", "expiring": "Brzy vyprší", "expired": "Prošlé"}
+
+
+@bp.route("/certificates")
+@login_required
+def certificates() -> str:
+    """Every certificate the logged-in person may read, filterable."""
+    units = people.list_units(me().dn, include_external=True)
+    unit = next((u for u in units if u.id == request.args.get("unit")), None)
+    found = people.search_people(me().dn, unit=unit, statuses=people.CURRENT_STATUSES, units=units)
+    owners = {p.dn.lower(): p for p in found}
+    q = people.sort_key(request.args.get("q", "").strip())
+    state = request.args.get("state", "")
+    found_certs = []
+    for cert in people.list_certificates(me().dn, unit.dn if unit else None):
+        owner = owners.get(cert.person_dn.lower())
+        if owner is None or (state and cert.state != state):
+            continue
+        if q and q not in people.sort_key(f"{owner.name} {cert.name} {cert.issuer}"):
+            continue
+        found_certs.append((owner, cert))
+    shown = {owner.dn: owner for owner, _ in found_certs}.values()
+    editable = {o.dn for o in shown if me().can_in_unit("certificate.manage", o.unit_dn) and not _protected(o)}
+    rows = [(owner, cert, owner.dn in editable) for owner, cert in found_certs]
+    rows.sort(key=lambda row: people.sort_key(row[0].name))
+    return render_template(
+        "members/certificates.html",
+        rows=rows,
+        units=units,
+        unit=unit,
+        state=state,
+        states=CERT_STATES,
+        q=request.args.get("q", ""),
+    )
+
+
+def _certificate_or_404(person: people.Person, cert_id: str) -> people.Certificate:
+    cert = next((c for c in people.certificates_of(person, me().dn) if c.id == cert_id), None)
+    if cert is None:
+        abort(404)
+    return cert
+
+
+def _cert_back(person: people.Person) -> Response:
+    if request.values.get("back") == "certificates":
+        return redirect(url_for("members.certificates"))
+    return _back(person)
+
+
+@bp.route("/<member_id>/certificates/new", methods=["GET", "POST"])
+@bp.route("/<member_id>/certificates/<cert_id>", methods=["GET", "POST"])
+@login_required
+def certificate(member_id: str, cert_id: str | None = None) -> str | Response:
+    person = _managed_or_403(member_id, "certificate.manage")
+    if _protected(person):
+        flash(PRIVILEGED, "warning")
+        return _back(person)
+    cert = _certificate_or_404(person, cert_id) if cert_id else None
+    form = request.form
+    if request.method == "POST":
+        name, issuer = forms.clean_note(form.get("name", "")), forms.clean_note(form.get("issuer", ""))
+        issued, e1 = forms.clean_day(form.get("issued", ""))
+        expires, e2 = forms.clean_day(form.get("expires", ""))
+        errors = [e for e in (e1, e2) if e]
+        if not name or not issuer or (issued is None and not e1):
+            errors.append("Vyplňte název, kdo osvědčení vydal, a datum vydání.")
+        if issued and expires and expires < issued:
+            errors.append("Platnost nemůže skončit před datem vydání.")
+        if not errors:
+            assert issued is not None
+            try:
+                people.save_certificate(person, cert, name, issuer, issued, expires, me().dn, form.get("csn", ""))
+            except StaleEntry:
+                # Reload, so the next save cannot overwrite the other change unseen.
+                flash(STALE, "warning")
+                back = form.get("back") or None
+                return redirect(url_for("members.certificate", member_id=person.id, cert_id=cert_id, back=back))
+            flash(f"Osvědčení „{name}“ je uloženo.", "success")
+            return _cert_back(person)
+        for e in errors:
+            flash(e, "danger")
+    return render_template("members/certificate.html", person=person, cert=cert, form=form)
+
+
+@bp.route("/<member_id>/certificates/<cert_id>/delete", methods=["POST"])
+@login_required
+def delete_certificate(member_id: str, cert_id: str) -> Response:
+    person = _managed_or_403(member_id, "certificate.manage")
+    if _protected(person):
+        flash(PRIVILEGED, "warning")
+        return _back(person)
+    cert = _certificate_or_404(person, cert_id)
+    people.delete_certificate(cert, me().dn)
+    flash(f"Osvědčení „{cert.name}“ je smazáno.", "success")
+    return _cert_back(person)
 
 
 def _invite(person: people.Person) -> str | None:

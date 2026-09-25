@@ -25,7 +25,7 @@ def test_create_and_rename_unit(client, admin):
     unit = next(u for u in people.list_units(admin.dn) if u.name == name)
     assert unit.slug.startswith("mistni-skupina-trinec-")
     groups = {e.first("cn") for e in people.d.search(unit.dn, "(objectClass=crcGroup)", ["cn"], as_dn=admin.dn)}
-    assert groups == {"members", "chair", "readers-basic", "readers-contact", "readers-extended"}
+    assert groups == {"members", "chair"} | {f"readers-{level}" for level in people.LEVELS}
     assert people.d.get(unit.requests_dn, ["ou"], as_dn=admin.dn) is not None
     client.post(f"/units/{unit.id}", data={"name": "Přejmenovaná"})
     assert people.get_unit(unit.id, admin.dn).name == "Přejmenovaná"

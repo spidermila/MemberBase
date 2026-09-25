@@ -72,7 +72,11 @@ olcAttributeTypes: ( crcAttr:29 NAME 'crcAccessName' DESC 'Names as the requeste
   EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
 olcAttributeTypes: ( crcAttr:30 NAME 'crcAccessSubject' DESC 'crcMemberIds the decider matched and approved'
   EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
-olcAttributeTypes: ( crcAttr:31 NAME 'crcAccessLevel' DESC 'basic | contact | extended'
+olcAttributeTypes: ( crcAttr:31 NAME 'crcAccessLevel' DESC 'basic | contact | extended | records'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:32 NAME 'crcCertificateId'
+  EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( crcAttr:33 NAME 'crcIssuer' DESC 'Who issued a certificate, training or diploma'
   EQUALITY caseIgnoreMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcObjectClasses: ( crcClass:1 NAME 'crcMember' AUXILIARY
   MUST ( crcMemberId $ crcMemberStatus $ crcMemberKind ) MAY crcStatusChangedAt )
@@ -94,3 +98,6 @@ olcObjectClasses: ( crcClass:10 NAME 'crcMoveRequest' AUXILIARY
   MUST ( crcMoveSubject $ crcMoveFromUnit ) MAY crcMoveSubjectName )
 olcObjectClasses: ( crcClass:11 NAME 'crcAccessRequest' AUXILIARY
   MUST ( crcAccessName $ crcAccessLevel ) MAY ( crcAccessSubject $ crcExpiresAt ) )
+olcObjectClasses: ( crcClass:12 NAME 'crcCertificate' DESC 'Certificate, training or diploma of the parent person;
+  crcValidFrom is the issue date, no crcValidUntil means it does not expire'
+  STRUCTURAL MUST ( crcCertificateId $ cn $ crcValidFrom ) MAY ( crcIssuer $ crcValidUntil ) )

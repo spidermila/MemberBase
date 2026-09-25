@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import csrf, status_badge %}
+{% from "macros/ui.html" import cert_badge, cert_dates, csrf, status_badge %}
 {% block title %}Můj profil – Evidence členů{% endblock %}
 {% block content %}
 <h2>Můj profil</h2>
@@ -15,8 +15,10 @@
           <dt class="col-sm-4">Role</dt>
           <dd class="col-sm-8">{% for r in roles %}{{ apps[r.app] }}: {{ r.label }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</dd>
           <dt class="col-sm-4">Kvalifikace</dt><dd class="col-sm-8">{{ held|join(', ') or '—' }}</dd>
+          <dt class="col-sm-4">Osvědčení</dt>
+          <dd class="col-sm-8">{% for c in certs %}<div>{{ c.name }} {{ cert_badge(c) }}<div class="small text-body-secondary">{{ c.issuer }} · {{ cert_dates(c) }}</div></div>{% else %}—{% endfor %}</dd>
         </dl>
-        <p class="small text-body-secondary mt-3 mb-0">Jméno a e-mail mění správce oblastního spolku.</p>
+        <p class="small text-body-secondary mt-3 mb-0">Jméno, e-mail a osvědčení mění správce oblastního spolku nebo předseda místní skupiny.</p>
       </div>
     </div>
     <form method="post" class="card mt-3">

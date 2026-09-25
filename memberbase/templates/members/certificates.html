@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import cert_badge %}
+{% block title %}Osvědčení – Evidence členů{% endblock %}
+{% block content %}
+<h2>Osvědčení</h2>
+<p class="text-body-secondary">Osvědčení, školení a diplomy osob. Nové osvědčení přidáte v detailu osoby.</p>
+
+<form method="get" class="row g-2 mb-3 align-items-end">
+  <div class="col-12 col-md-4">
+    <label class="form-label small" for="q">Hledat</label>
+    <input class="form-control" id="q" name="q" value="{{ q }}" placeholder="Osoba, název nebo kdo vydal">
+  </div>
+  <div class="col-6 col-md-3">
+    <label class="form-label small" for="unit">Místní skupina</label>
+    <select class="form-select" id="unit" name="unit">
+      <option value="">Všechny</option>
+      {% for u in units %}<option value="{{ u.id }}" {{ 'selected' if unit and unit.id == u.id }}>{{ u.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-6 col-md-2">
+    <label class="form-label small" for="state">Platnost</label>
+    <select class="form-select" id="state" name="state">
+      <option value="">Všechna</option>
+      {% for key, label in states.items() %}<option value="{{ key }}" {{ 'selected' if state == key }}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-auto"><button class="btn btn-outline-secondary">Filtrovat</button></div>
+  {% if q or unit or state %}
+  <div class="col-auto"><a class="btn btn-outline-secondary" href="{{ url_for('members.certificates') }}">Zrušit filtry</a></div>
+  {% endif %}
+</form>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle table-stack">
+    <thead class="table-light">
+      <tr>
+        <th data-sort aria-sort="ascending">Osoba</th><th data-sort>Místní skupina</th><th data-sort>Název</th>
+        <th class="d-none d-md-table-cell" data-sort>Vydal</th><th data-sort>Vydáno</th><th data-sort>Platnost do</th>
+        <th data-sort>Stav</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for owner, cert, can_edit in rows %}
+      <tr>
+        <td><a href="{{ url_for('members.detail', member_id=owner.id) }}">{{ owner.name }}</a></td>
+        <td>{{ owner.unit.name if owner.unit else '' }}</td>
+        <td>{{ cert.name }}</td>
+        <td class="d-none d-md-table-cell">{{ cert.issuer }}</td>
+        <td data-sort="{{ cert.issued.isoformat() if cert.issued else '' }}">{{ cert.issued.strftime('%d. %m. %Y') if cert.issued else '—' }}</td>
+        <td data-sort="{{ cert.expires.isoformat() if cert.expires else '9999' }}">{{ cert.expires.strftime('%d. %m. %Y') if cert.expires else 'bez omezení' }}</td>
+        <td data-sort="{{ cert.state }}">{{ cert_badge(cert) }}</td>
+        <td>{% if can_edit %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('members.certificate', member_id=owner.id, cert_id=cert.id, back='certificates') }}">Upravit</a>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="text-body-secondary">Žádná osvědčení.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="small text-body-secondary">Celkem {{ rows|length }}. Vidíte jen osvědčení, která vám pravidla sdílení zpřístupňují.</p>
+{% endblock %}

@@ -530,3 +530,118 @@ def test_odd_times_in_requests_do_not_break_listing(setup, admin):
     [req] = approvals.list_requests(setup["alice"].dn)
     assert req.expires_at.year == 2099 and req.requested_by_name == "Alice Domácí"
     assert people.parse_ldap_time("20990101") is None
+
+
+# ── Certificates („Osvědčení“) ───────────────────────────────────────────────
+
+
+def _cert(person, as_dn, name="Kurz"):
+    people.save_certificate(person, None, name, "Úřad", datetime(2024, 1, 1).date(), None, as_dn)
+
+
+def _cert_names(person, as_dn):
+    return [c.name for c in people.certificates_of(person, as_dn)]
+
+
+def test_certificates_hidden_from_own_branch_shown_to_person_and_readers(setup, world, admin):
+    alice, bob = setup["alice"], setup["bob"]
+    _cert(alice, admin.dn)
+    assert _cert_names(alice, alice.dn) == ["Kurz"]
+    assert _cert_names(alice, setup["anna"].dn) == []
+    assert _cert_names(alice, bob.dn) == []
+    assert _cert_names(alice, world.person(setup["home"], "Dana", roles=["memberbase:district-coordinator"]).dn)
+
+
+@pytest.mark.parametrize("to_person", [False, True])
+def test_records_grant_shows_name_and_certificates_not_contact(setup, admin, to_person):
+    alice, bob = setup["alice"], setup["bob"]
+    _cert(alice, admin.dn)
+    people.create_grant(bob.id, alice if to_person else setup["home"], "records", None, "", admin.id, None)
+    assert level(alice, bob.dn) == "basic"
+    assert _cert_names(alice, bob.dn) == ["Kurz"]
+    assert _cert_names(alice, setup["ext"].dn) == []
+
+
+def test_records_grant_on_external_users(setup, admin):
+    ext = setup["ext"]
+    _cert(ext, admin.dn)
+    assert _cert_names(ext, ext.dn) == ["Kurz"]
+    assert _cert_names(ext, setup["alice"].dn) == []
+    people.create_grant(setup["alice"].id, people.get_unit("external", admin.dn), "records", None, "", admin.id, None)
+    assert level(ext, setup["alice"].dn) == "basic"
+    assert _cert_names(ext, setup["alice"].dn) == ["Kurz"]
+
+
+def test_contact_and_extended_grants_do_not_show_certificates(setup, admin):
+    _cert(setup["bob"], admin.dn)
+    for grant_level in ("contact", "extended"):
+        people.create_grant(setup["alice"].id, setup["other"], grant_level, None, "", admin.id, None)
+    assert _cert_names(setup["bob"], setup["alice"].dn) == []
+
+
+def test_chair_manages_certificates_of_own_unit_only(setup, admin, chair):
+    alice = setup["alice"]
+    _cert(alice, chair.dn)
+    (cert,) = people.certificates_of(alice, chair.dn)
+    people.save_certificate(alice, cert, "Nový", "Úřad", cert.issued, None, chair.dn, cert.csn)
+    people.delete_certificate(people.certificates_of(alice, chair.dn)[0], chair.dn)
+    assert _cert_names(alice, chair.dn) == []
+    _cert(setup["bob"], admin.dn)
+    assert _cert_names(setup["bob"], chair.dn) == []
+    with pytest.raises(d.Denied):
+        _cert(setup["bob"], chair.dn)
+    with pytest.raises(d.Denied):
+        _cert(setup["anna"], setup["alice"].dn)
+
+
+def test_chair_reads_but_cannot_change_certificates_of_privileged_people(setup, world, admin, chair):
+    boss = world.person(setup["home"], "Olga Oprávněná", roles=["medcover:coordinator"])
+    _cert(boss, admin.dn)
+    _cert(chair, admin.dn)
+    for target in (boss, chair):
+        (cert,) = people.certificates_of(target, chair.dn)
+        with pytest.raises(d.Denied):
+            _cert(target, chair.dn, "Další")
+        with pytest.raises(d.Denied):
+            people.delete_certificate(cert, chair.dn)
+        with pytest.raises(d.Denied):
+            people.save_certificate(target, cert, "Změna", "Úřad", cert.issued, None, chair.dn, cert.csn)
+
+
+def test_person_cannot_change_own_certificates(setup, admin):
+    alice = setup["alice"]
+    _cert(alice, admin.dn)
+    (cert,) = people.certificates_of(alice, alice.dn)
+    with pytest.raises(d.Denied):
+        people.save_certificate(alice, cert, "Změna", "Úřad", cert.issued, None, alice.dn, cert.csn)
+    with pytest.raises(d.Denied):
+        _cert(alice, alice.dn, "Vlastní")
+
+
+def test_sync_account_does_not_read_certificates(setup, admin):
+    person = setup["alice"]
+    people.toggle_role(
+        person, next(r for r in people.list_roles(admin.dn) if r.key == "medcover:member"), True, admin.dn
+    )
+    _cert(person, admin.dn)
+    conn = service_conn("medcover-sync", os.environ["TEST_SYNC_PASSWORD"])
+    found = conn.search_s(person.dn, ldap.SCOPE_SUBTREE, "(objectClass=*)", ["cn"])
+    assert found and not [dn for dn, _ in found if dn.lower().startswith("crccertificateid=")]
+
+
+def test_only_the_service_account_creates_unit_readers_groups(setup, chair):
+    with pytest.raises(d.Denied):
+        d.add(f"cn=readers-x,{setup['home'].dn}", {"objectClass": ["crcGroup"], "cn": ["readers-x"]}, chair.dn)
+    with pytest.raises(d.Denied):
+        d.add(f"cn=readers-x,{people.external_dn()}", {"objectClass": ["crcGroup"], "cn": ["readers-x"]}, chair.dn)
+
+
+def test_members_job_adds_missing_readers_groups(setup, admin):
+    for unit in (setup["home"], people.get_unit("external", admin.dn)):
+        d.delete(unit.readers_dn("records"), admin.dn)
+    assert people.repair_members() >= 2
+    assert d.get(setup["home"].readers_dn("records"), ["cn"], admin.dn) is not None
+    assert d.get(f"cn=readers-records,{people.external_dn()}", ["cn"], admin.dn) is not None
+    for dn in (setup["home"].readers_dn("records"), f"cn=readers-records,{people.external_dn()}"):
+        with pytest.raises(d.Denied):
+            d.delete(dn, None)  # the service account adds readers groups, never removes them

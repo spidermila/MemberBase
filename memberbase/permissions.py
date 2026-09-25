@@ -21,6 +21,7 @@ PERMISSION_LABELS = {
     "mfa.reset": "Resetuje dvoufázové ověření",
     "unit.manage": "Spravuje místní skupiny",
     "qualification.manage": "Spravuje kvalifikace",
+    "certificate.manage": "Spravuje osvědčení osob",
     "grant.manage": "Spravuje sdílení údajů",
     "history.view": "Vidí historii změn",
     "request.create": "Žádá o přístup k údajům osob z jiných místních skupin",
@@ -31,7 +32,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     DISTRICT_COORDINATOR: {"member.view_all"},
     CHAIR: {"request.create"},
 }
-CHAIR_UNIT_PERMISSIONS = {"member.edit", "member.status", "qualification.manage"}
+CHAIR_UNIT_PERMISSIONS = {"member.edit", "member.status", "qualification.manage", "certificate.manage"}
 
 
 def permissions_for(roles: set[str]) -> set[str]:

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import csrf, status_badge %}
+{% from "macros/ui.html" import cert_badge, cert_dates, csrf, status_badge %}
 {% block title %}{{ person.name }} – Evidence členů{% endblock %}
 {% block content %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -67,6 +67,32 @@
         {% endif %}
       </div>
     </div>
+
+    {% if can_certs or certs %}
+    <div class="card mt-3">
+      <div class="card-header d-flex align-items-center">Osvědčení
+        {% if can_certs %}<a class="btn btn-sm btn-outline-danger ms-auto" href="{{ url_for('members.certificate', member_id=person.id) }}">+ Přidat</a>{% endif %}
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for c in certs %}
+        <li class="list-group-item d-flex flex-wrap align-items-center gap-2">
+          <div class="me-auto">
+            <div>{{ c.name }} {{ cert_badge(c) }}</div>
+            <div class="small text-body-secondary">{{ c.issuer }} · {{ cert_dates(c) }}</div>
+          </div>
+          {% if can_certs %}
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('members.certificate', member_id=person.id, cert_id=c.id) }}">Upravit</a>
+          <form method="post" action="{{ url_for('members.delete_certificate', member_id=person.id, cert_id=c.id) }}"
+                data-confirm="Smazat osvědčení „{{ c.name }}“?">
+            {{ csrf() }}<button class="btn btn-sm btn-outline-danger">Smazat</button></form>
+          {% endif %}
+        </li>
+        {% else %}
+        <li class="list-group-item text-body-secondary">Zatím žádná osvědčení.</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
   </div>
 
   <div class="col-lg-6">
