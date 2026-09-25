@@ -3,7 +3,7 @@ person on every request, and permission and step-up checks."""
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any
 from urllib.parse import urlencode, urlsplit
@@ -13,7 +13,7 @@ from flask import Blueprint, Flask, abort, current_app, flash, g, redirect, rend
 from werkzeug.wrappers import Response
 
 from memberbase import people
-from memberbase.permissions import ADMIN, permissions_for
+from memberbase.permissions import ADMIN, CHAIR, CHAIR_UNIT_PERMISSIONS, permissions_for
 
 bp = Blueprint("auth", __name__)
 oauth = OAuth()
@@ -27,6 +27,7 @@ class Me:
     person: people.Person
     roles: set[str]
     permissions: set[str]
+    chairs: set[str] = field(default_factory=set)  # DNs (lower case) of the Místní skupiny chaired
 
     @property
     def dn(self) -> str:
@@ -34,6 +35,18 @@ class Me:
 
     def can(self, permission: str) -> bool:
         return permission in self.permissions
+
+    def is_chair_of(self, unit_dn: str) -> bool:
+        return unit_dn.lower() in self.chairs
+
+    def can_in_unit(self, permission: str, unit_dn: str) -> bool:
+        """`permission` for the people of one Místní skupina: everywhere by
+        role, or there as its Chair."""
+        return self.can(permission) or (permission in CHAIR_UNIT_PERMISSIONS and self.is_chair_of(unit_dn))
+
+    @property
+    def manages_people(self) -> bool:
+        return self.can("member.edit") or bool(self.chairs)
 
     @property
     def is_admin(self) -> bool:
@@ -84,7 +97,8 @@ def load_me() -> Response | None:
         return redirect(url_for("main.index"))
     app_roles = people.roles_of(person.dn)
     mb_roles = {r.split(":", 1)[1] for r in app_roles if r.startswith("memberbase:")}
-    g.me = Me(person, app_roles, permissions_for(mb_roles))
+    chairs = people.chairs_of(person.dn)
+    g.me = Me(person, app_roles, permissions_for(mb_roles | ({CHAIR} if chairs else set())), chairs)
     return None
 
 

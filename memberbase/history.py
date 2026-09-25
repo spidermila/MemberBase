@@ -4,15 +4,14 @@ identity), old and new values; nobody can edit it."""
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo
 
+from memberbase import approvals
 from memberbase import directory as d
 from memberbase import people
 from memberbase.directory import escape_filter_chars
 
 ACCESSLOG_BASE = "cn=accesslog"
 LIMIT = 300
-PRAGUE = ZoneInfo("Europe/Prague")
 
 TYPES = {"add": "Vytvoření", "modify": "Změna", "delete": "Odstranění", "modrdn": "Přesun"}
 ATTR_LABELS = {
@@ -30,6 +29,12 @@ ATTR_LABELS = {
     "crcGrantee": "Komu",
     "crcGrantTarget": "Úroveň a skupina",
     "crcExpiresAt": "Platnost do",
+    "crcRequestStatus": "Stav žádosti",
+    "crcDecidedBy": "Kdo rozhodl",
+    "crcAccessName": "Požadovaná jména",
+    "crcAccessSubject": "Zpřístupněné osoby",
+    "crcAccessLevel": "Rozsah",
+    "crcMoveSubjectName": "Koho přesunout",
     "userPassword": "Heslo",
 }
 # Bookkeeping attributes, or ones derived from those shown.
@@ -51,6 +56,13 @@ HIDDEN = {
     "crcHoldingId",
     "crcGrantId",
     "crcQualificationId",
+    "crcRequestId",
+    "crcRequestType",
+    "crcRequestedByDn",
+    "crcRequestNotify",
+    "crcDecidedAt",
+    "crcMoveSubject",
+    "crcMoveFromUnit",
 }
 OPS = {"+": "přidáno", "-": "odebráno", "=": "nastaveno", "": "smazáno"}
 
@@ -99,6 +111,11 @@ class Labels:
             return f"kvalifikace – {self.dn(key.split(',', 1)[1])}"
         if rdn.startswith("crcgrantid="):
             return "sdílení údajů"
+        if rdn.startswith("crcrequestid="):
+            return "žádost"
+        if rdn.startswith("cn=readers-") and key.split(",", 1)[1] in self.dns:
+            level = people.LEVELS.get(rdn.removeprefix("cn=readers-"), rdn)
+            return f"{level} – {self.dns[key.split(',', 1)[1]]}"
         if rdn.startswith("crcqualificationid="):
             return f"kvalifikace {self.ids.get(rdn.split('=', 1)[1], '')}".strip()
         if key.endswith("cn=peercred,cn=external,cn=auth"):
@@ -110,10 +127,21 @@ class Labels:
             return "••••"
         if attr in {"member", "crcGrantTarget"}:
             return self.dn(value)
-        if attr in {"crcParent", "crcQualificationRef", "crcGrantee", "crcApprovedBy"}:
+        if attr in {
+            "crcParent",
+            "crcQualificationRef",
+            "crcGrantee",
+            "crcApprovedBy",
+            "crcDecidedBy",
+            "crcAccessSubject",
+        }:
             return self.ids.get(value, value)
         if attr == "crcMemberStatus":
             return people.STATUSES.get(value, value)
+        if attr == "crcAccessLevel":
+            return people.LEVELS.get(value, value)
+        if attr == "crcRequestStatus":
+            return approvals.STATUSES.get(value, value)
         if attr == "crcCanBeRp":
             return "ano" if value == "TRUE" else "ne"
         return value
@@ -163,7 +191,9 @@ def changes(as_dn: str, person: people.Person | None = None) -> list[Change]:
     labels = Labels(as_dn)
     return [
         Change(
-            when=datetime.strptime(e.first("reqStart")[:14], "%Y%m%d%H%M%S").replace(tzinfo=UTC).astimezone(PRAGUE),
+            when=datetime.strptime(e.first("reqStart")[:14], "%Y%m%d%H%M%S")
+            .replace(tzinfo=UTC)
+            .astimezone(people.PRAGUE),
             actor=labels.dn(e.first("reqAuthzID")),
             action=TYPES.get(e.first("reqType"), e.first("reqType")),
             target=labels.dn(e.first("reqDN")),

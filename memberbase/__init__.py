@@ -9,7 +9,7 @@ from werkzeug.wrappers import Response
 
 from memberbase import auth, cli, directory, people
 from memberbase.config import from_env
-from memberbase.views import admin, main, members
+from memberbase.views import admin, main, members, requests
 
 csrf = CSRFProtect()
 
@@ -24,6 +24,7 @@ def create_app(overrides: dict[str, Any] | None = None) -> Flask:
     app.register_blueprint(main.bp)
     app.register_blueprint(members.bp)
     app.register_blueprint(admin.bp)
+    app.register_blueprint(requests.bp)
     cli.init_app(app)
     app.teardown_appcontext(directory.close)
 

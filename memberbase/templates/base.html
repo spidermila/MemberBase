@@ -24,8 +24,11 @@
         <ul class="navbar-nav me-auto">
           {% if me %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('members.index') }}">Členové</a></li>
-          {% if me.can('member.edit') %}
+          {% if me.manages_people %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('members.invites') }}">Pozvánky</a></li>
+          {% endif %}
+          {% if me.can('request.create') %}
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('requests.index') }}">Žádosti</a></li>
           {% endif %}
           {% if me.can('unit.manage') %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.units') }}">Místní skupiny</a></li>

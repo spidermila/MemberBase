@@ -146,6 +146,14 @@ dn: cn=readers-extended,ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
 objectClass: crcGroup
 cn: readers-extended
 
+dn: cn=chair,ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+objectClass: crcGroup
+cn: chair
+
+dn: ou=requests,ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
+objectClass: organizationalUnit
+ou: requests
+
 dn: uid={{ADMIN_ID}},ou={{UNIT_SLUG}},ou=units,{{BASE_DN}}
 objectClass: inetOrgPerson
 objectClass: crcMember

@@ -20,32 +20,127 @@ olcAccess: to attrs=userPassword
   by anonymous auth
   by * none
 # 2: service accounts are invisible; slapd checks MemberBase's authzTo
-# (whom it may act as) with its own identity.
+# (whom it may act as) with its own identity. Nobody may give any other
+# entry an authzTo or authzFrom.
 olcAccess: to dn.subtree="ou=services,{{BASE_DN}}" attrs=authzTo
   by self auth
   by * none
 olcAccess: to dn.subtree="ou=services,{{BASE_DN}}"
+  by * none
+olcAccess: to attrs=authzTo,authzFrom
   by * none
 # 3: MemberBase Admins change everything, District Coordinators read everything.
 olcAccess: to dn.subtree="{{BASE_DN}}"
   by group/crcGroup/member.exact="cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" write
   by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" read
   by * break
+# 3a-3f: MS Chairs (members of cn=chair of a Místní skupina) administer the
+# people of that Místní skupina: edit and change status, add new people,
+# manage qualification holdings. People with a privileged role and Chairs
+# (themselves included) are left to Admins: the first clause of each rule
+# skips them. Adding is "add", never delete or rename: people are archived.
+# Only Admins change cn=chair itself (rule 3). Chairs do not write
+# cn=members (ACLs cannot limit the values to their own people); people they
+# add join it at first login or by the nightly members repair. With
+# olcAddContentAcl, a Chair adds only the attributes listed here.
+# MemberBase's own account renames people, fills per-person readers groups
+# and creates missing cn=chair and ou=requests (members repair).
+olcAccess: to dn.regex="^uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=cn,givenName,sn,mail,telephoneNumber,crcMemberStatus,crcStatusChangedAt
+  by set.expand="this & ([cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member)" break
+  by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" write
+  by * break
+olcAccess: to dn.regex="^uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=entry,objectClass,uid,crcMemberId
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
+  by set.expand="this & ([cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member)" break
+  by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" add
+  by * break
+olcAccess: to dn.regex="^uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=crcMemberKind val=member
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
+  by set.expand="this & ([cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member)" break
+  by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" add
+  by * break
+olcAccess: to dn.regex="^uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=children
+  by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" write
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
+  by * break
+olcAccess: to dn.regex="^ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=children
+  by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" add
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
+  by * break
+olcAccess: to dn.regex="^crcHoldingId=[^,]+,(uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}})$"
+  attrs=entry,objectClass,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil
+  by set.expand="[$1] & ([cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=chair,ou=$2,ou=units,{{BASE_DN}}]/member)" break
+  by set.expand="[cn=chair,ou=$2,ou=units,{{BASE_DN}}]/member & user" write
+  by * break
+olcAccess: to dn.regex="^cn=chair,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=entry,objectClass,cn,member
+  by dn.regex="^uid=[^,]+,ou=$1,ou=units,{{BASE_RE}}$" read
+  by * break
+olcAccess: to dn.regex="^(cn=chair|ou=requests),ou=[^,]+,ou=units,{{BASE_RE}}$"
+  attrs=entry,objectClass,cn,ou
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
+  by * break
+olcAccess: to dn.regex="^cn=readers-[a-z]+,uid=[^,]+,ou=[^,]+,ou=units,{{BASE_RE}}$"
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
+  by * break
+# 3g-3m: requests. A person in a Místní skupina may file one under any
+# other Místní skupina, as pending and naming themselves as the requester
+# (crcRequestedByDn); that Místní skupina's Chairs read and decide it; the
+# requester and the people it names to notify read it. The status moves only
+# forward: pending → approved/rejected, approved → done/failed; a Chair can
+# neither reopen a request nor file one under their own Místní skupina.
+olcAccess: to dn.regex="^ou=requests,ou=[^,]+,ou=units,{{BASE_RE}}$"
+  attrs=children
+  by dn.regex="^uid=[^,]+,ou=[^,]+,ou=units,{{BASE_RE}}$" add
+  by * break
+olcAccess: to dn.regex="^crcRequestId=[^,]+,ou=requests,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=crcDecidedBy,crcDecidedAt,crcAccessSubject
+  by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" write
+  by * break
+olcAccess: to dn.regex="^crcRequestId=[^,]+,ou=requests,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=crcRequestStatus val=pending
+  by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" =rscxdz
+  by dnattr=crcRequestedByDn add
+  by * break
+olcAccess: to dn.regex="^crcRequestId=[^,]+,ou=requests,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=crcRequestStatus val=approved
+  by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" =rscxdaz
+  by * break
+olcAccess: to dn.regex="^crcRequestId=[^,]+,ou=requests,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=crcRequestStatus val.regex="^(rejected|done|failed)$"
+  by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" =rscxda
+  by * break
+olcAccess: to dn.regex="^crcRequestId=[^,]+,ou=requests,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=entry,objectClass,crcRequestId,crcRequestType,crcRequestedByDn,crcRequestNotify,description,crcMoveSubject,crcMoveSubjectName,crcMoveFromUnit,crcAccessName,crcAccessLevel,crcExpiresAt
+  by dnattr=crcRequestedByDn add
+  by * break
+olcAccess: to dn.regex="^crcRequestId=[^,]+,ou=requests,ou=([^,]+),ou=units,{{BASE_RE}}$"
+  attrs=entry,objectClass,crcRequestId,crcRequestType,crcRequestedByDn,crcRequestNotify,description,crcMoveSubject,crcMoveSubjectName,crcMoveFromUnit,crcAccessName,crcAccessLevel,crcExpiresAt,crcRequestStatus,crcDecidedBy,crcDecidedAt,crcAccessSubject,entryCSN,createTimestamp
+  by dnattr=crcRequestedByDn read
+  by dnattr=crcRequestNotify read
+  by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" read
+  by * break
 # 4-6: MemberBase's own account (not proxied): looks up the person logging in,
-# activates invited people, reads app roles, runs the grant-expiry job.
+# activates invited people, reads app roles, runs the jobs, carries out
+# approved requests.
 olcAccess: to dn.regex="^uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
-  attrs=crcMemberStatus,crcStatusChangedAt
+  attrs=crcMemberStatus,crcStatusChangedAt,crcMemberKind,uid
   by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
   by * break
 olcAccess: to dn.subtree="ou=grants,{{BASE_DN}}"
   by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
   by * break
-olcAccess: to dn.regex="^cn=(readers-[a-z]+|members),(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
+olcAccess: to dn.regex="^cn=(readers-[a-z]+|members|chair),(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
   attrs=member
   by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
   by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" read
   by * break
-olcAccess: to dn.regex="^cn=(readers-[a-z]+|members),(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
+olcAccess: to dn.regex="^cn=(readers-[a-z]+|members|chair),(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
   attrs=entry,objectClass,cn
   by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" read
   by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" read
@@ -72,19 +167,25 @@ olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?(uid=[^,]+,(ou=[^,]+,ou=units|ou=
 # 11-13: visibility levels between people (see the design: basic = name and
 # Místní skupina, contact = + email and phone, extended = + later attributes).
 # Readers groups hold people or a branch's cn=members group; member* expands
-# the nesting.
-olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}}$"
-  attrs=entry,objectClass,uid,crcMemberId,cn,givenName,sn,crcMemberStatus,crcMemberKind,crcStatusChangedAt,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil
-  by dn.regex="^uid=[^,]+,ou=$2,ou=units,{{BASE_RE}}$" read
-  by set.expand="[cn=readers-basic,ou=$2,ou=units,{{BASE_DN}}]/member* & user" read
-  by set.expand="[cn=readers-contact,ou=$2,ou=units,{{BASE_DN}}]/member* & user" read
-  by set.expand="[cn=readers-extended,ou=$2,ou=units,{{BASE_DN}}]/member* & user" read
+# the nesting. A branch has readers groups for all its people; a person may
+# have their own (a grant for just that person).
+olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?(uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}})$"
+  attrs=entry,objectClass,uid,crcMemberId,cn,givenName,sn,crcMemberStatus,crcMemberKind,crcStatusChangedAt,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil,entryCSN
+  by dn.regex="^uid=[^,]+,ou=$3,ou=units,{{BASE_RE}}$" read
+  by set.expand="[cn=readers-basic,ou=$3,ou=units,{{BASE_DN}}]/member* & user" read
+  by set.expand="[cn=readers-contact,ou=$3,ou=units,{{BASE_DN}}]/member* & user" read
+  by set.expand="[cn=readers-extended,ou=$3,ou=units,{{BASE_DN}}]/member* & user" read
+  by set.expand="[cn=readers-basic,$2]/member* & user" read
+  by set.expand="[cn=readers-contact,$2]/member* & user" read
+  by set.expand="[cn=readers-extended,$2]/member* & user" read
   by * break
-olcAccess: to dn.regex="^uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}}$"
+olcAccess: to dn.regex="^(uid=[^,]+,ou=([^,]+),ou=units,{{BASE_RE}})$"
   attrs=mail,telephoneNumber
 {{OWN_BRANCH_CONTACT}}
-  by set.expand="[cn=readers-contact,ou=$1,ou=units,{{BASE_DN}}]/member* & user" read
-  by set.expand="[cn=readers-extended,ou=$1,ou=units,{{BASE_DN}}]/member* & user" read
+  by set.expand="[cn=readers-contact,ou=$2,ou=units,{{BASE_DN}}]/member* & user" read
+  by set.expand="[cn=readers-extended,ou=$2,ou=units,{{BASE_DN}}]/member* & user" read
+  by set.expand="[cn=readers-contact,$1]/member* & user" read
+  by set.expand="[cn=readers-extended,$1]/member* & user" read
   by * break
 olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?uid=[^,]+,ou=external,{{BASE_RE}}$"
   attrs=entry,objectClass,uid,crcMemberId,cn,givenName,sn,crcMemberStatus,crcMemberKind,crcStatusChangedAt,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil
@@ -99,13 +200,14 @@ olcAccess: to dn.regex="^uid=[^,]+,ou=external,{{BASE_RE}}$"
   by * break
 # 15: app subtree: MedCover sync reads its own app; everyone reads role and
 # qualification definitions; role membership only via the rules above.
+# MemberBase's own account removes archived people from roles (members job).
 olcAccess: to dn.subtree="ou=medcover,ou=apps,{{BASE_DN}}"
   by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" read
   by * break
 olcAccess: to dn.subtree="ou=apps,{{BASE_DN}}"
   attrs=member
   by dn.exact="cn=keycloak,ou=services,{{BASE_DN}}" read
-  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" read
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
   by * none
 olcAccess: to dn.subtree="ou=apps,{{BASE_DN}}"
   attrs=entry,objectClass,ou,cn,description,crcQualificationId,crcParent,crcCanBeRp

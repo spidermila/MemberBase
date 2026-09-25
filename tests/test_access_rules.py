@@ -2,11 +2,13 @@
 for both the allowed and the denied case, against the real OpenLDAP image."""
 
 import os
+import time
 from datetime import UTC, datetime, timedelta
 
 import ldap
 import pytest
 
+from memberbase import approvals
 from memberbase import directory as d
 from memberbase import people
 
@@ -190,7 +192,7 @@ def test_memberbase_service_reads_login_data_but_not_phone(setup):
     assert "telephoneNumber" not in seen
 
 
-def test_memberbase_service_may_only_change_status(setup):
+def test_memberbase_service_cannot_edit_person_data(setup):
     people.set_status(setup["bob"], "inactive", None)
     with pytest.raises(d.Denied):
         d.modify(setup["bob"].dn, {"cn": ["Změna"]}, None)
@@ -244,3 +246,287 @@ def test_expired_grants_are_revoked_by_the_job(setup, admin):
     assert level(setup["bob"], setup["alice"].dn) == "contact"
     assert people.expire_grants() >= 1
     assert level(setup["bob"], setup["alice"].dn) == "none"
+
+
+# ── MS Chair ─────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def chair(setup, world):
+    return world.chair(setup["home"])
+
+
+def test_chair_edits_people_of_own_unit_only(setup, chair):
+    d.modify(setup["alice"].dn, {"cn": ["Alice Nová"], "mail": [f"n-{chair.id}@example.org"]}, chair.dn)
+    people.set_status(setup["alice"], "inactive", chair.dn)
+    for target in (setup["bob"], setup["ext"]):
+        with pytest.raises(d.Denied):
+            d.modify(target.dn, {"cn": ["Změna"]}, chair.dn)
+    with pytest.raises(d.Denied):
+        d.modify(setup["alice"].dn, {"crcMemberKind": ["external"]}, chair.dn)
+
+
+@pytest.mark.parametrize("role", sorted(people.PRIVILEGED_ROLES))
+def test_chair_cannot_edit_privileged_people(setup, world, chair, role):
+    boss = world.person(setup["home"], "Olga Oprávněná", roles=[role])
+    for attr, value in [("mail", "x@example.org"), ("crcMemberStatus", "inactive"), ("cn", "Změna")]:
+        with pytest.raises(d.Denied):
+            d.modify(boss.dn, {attr: [value]}, chair.dn)
+    assert level(boss, chair.dn) == "contact"
+
+
+def test_chair_cannot_edit_another_chair_or_themselves(setup, world, chair):
+    other_chair = world.chair(setup["home"], "Pavel Místopředseda")
+    for target in (other_chair, chair):
+        with pytest.raises(d.Denied):
+            d.modify(target.dn, {"mail": ["x@example.org"]}, chair.dn)
+    d.modify(chair.dn, {"telephoneNumber": ["111222333"]}, chair.dn)
+
+
+def test_chair_creates_people_in_own_unit_only(setup, chair):
+    person = people.create_person("Nový Člen", f"n-{chair.id}@example.org", "", setup["home"], chair.dn)
+    assert person.unit_dn.lower() == setup["home"].dn.lower()
+    with pytest.raises(d.Denied):
+        people.create_person("Cizí Člen", f"c-{chair.id}@example.org", "", setup["other"], chair.dn)
+
+
+def _person_attrs(unit, chair, **extra):
+    member_id = people.new_id()
+    attrs = {
+        "objectClass": ["inetOrgPerson", "crcMember"],
+        "uid": [member_id],
+        "crcMemberId": [member_id],
+        "cn": ["Podvržený"],
+        "sn": ["Podvržený"],
+        "mail": [f"p-{member_id}@example.org"],
+        "crcMemberStatus": ["active"],
+        "crcMemberKind": ["member"],
+    } | extra
+    return f"uid={member_id},{unit.dn}", attrs
+
+
+def test_chair_cannot_add_people_with_credentials_or_proxy_rights(setup, chair):
+    for extra in (
+        {"userPassword": ["heslo-123"]},
+        {"authzTo": ["dn.regex:.*"]},
+        {"description": ["cokoli"]},
+    ):
+        dn, attrs = _person_attrs(setup["home"], chair, **extra)
+        with pytest.raises(d.Denied):
+            d.add(dn, attrs, chair.dn)
+    dn, attrs = _person_attrs(setup["home"], chair)
+    d.add(dn, attrs, chair.dn)
+
+
+def test_chair_cannot_change_holdings_of_privileged_people(setup, world, admin, chair):
+    boss = world.person(setup["home"], "Olga Oprávněná", roles=["medcover:coordinator"])
+    people.save_qualification(None, f"Kval2 {chair.id}", "", [], False, admin.dn)
+    qual = next(q for q in people.list_qualifications(admin.dn) if q.name == f"Kval2 {chair.id}")
+    for target in (boss, chair):
+        with pytest.raises(d.Denied):
+            people.set_holdings(target, {qual.id}, chair.dn)
+
+
+def test_chair_cannot_delete_or_move_people(setup, chair):
+    with pytest.raises(d.Denied):
+        d.delete(setup["alice"].dn, chair.dn)
+    with pytest.raises(d.Denied):
+        d.move(setup["alice"].dn, setup["other"].dn, chair.dn)
+
+
+def test_chair_cannot_change_members_group(setup, chair):
+    with pytest.raises(d.Denied):
+        d.add_values(setup["home"].members_dn, "member", [setup["bob"].dn], chair.dn)
+
+
+def test_chair_manages_holdings_of_own_unit_only(setup, admin, chair):
+    people.save_qualification(None, f"Kval {chair.id}", "", [], False, admin.dn)
+    qual = next(q for q in people.list_qualifications(admin.dn) if q.name == f"Kval {chair.id}")
+    people.set_holdings(setup["alice"], {qual.id}, chair.dn)
+    assert people.holdings_of(setup["alice"], chair.dn)
+    people.set_holdings(setup["alice"], set(), chair.dn)
+    assert not people.holdings_of(setup["alice"], chair.dn)
+    with pytest.raises(d.Denied):
+        people.set_holdings(setup["bob"], {qual.id}, chair.dn)
+
+
+def test_only_admin_appoints_chairs(setup, chair):
+    for person in (chair, setup["alice"]):
+        with pytest.raises(d.Denied):
+            people.set_chair(setup["anna"], True, person.dn)
+    with pytest.raises(d.Denied):
+        people.set_chair(chair, False, chair.dn)
+
+
+def test_chair_cannot_assign_roles_or_grants(setup, admin, chair):
+    role = next(r for r in people.list_roles(admin.dn) if r.key == "medcover:member")
+    with pytest.raises(d.Denied):
+        people.toggle_role(setup["alice"], role, True, chair.dn)
+    with pytest.raises(d.Denied):
+        people.create_grant(setup["alice"].id, setup["other"], "basic", None, "", chair.id, chair.dn)
+
+
+def test_own_unit_sees_its_chairs_others_do_not(setup, chair):
+    assert people.chair_members(setup["home"], setup["alice"].dn) == {chair.dn.lower()}
+    assert people.chair_members(setup["home"], setup["bob"].dn) == set()
+    assert people.chairs_of(chair.dn) == {setup["home"].dn.lower()}
+
+
+def test_chair_reads_nothing_more_of_other_units(setup, chair):
+    assert level(setup["bob"], chair.dn) == "none"
+
+
+# ── Requests ─────────────────────────────────────────────────────────────────
+
+
+def _request(unit, requester, **extra):
+    req_id = people.new_id()
+    dn = f"crcRequestId={req_id},{unit.requests_dn}"
+    attrs = {
+        "objectClass": ["crcRequest", "crcAccessRequest"],
+        "crcRequestId": [req_id],
+        "crcRequestType": ["access"],
+        "crcRequestedByDn": [requester.dn],
+        "crcRequestStatus": ["pending"],
+        "crcAccessName": ["Bob Cizí"],
+        "crcAccessLevel": ["contact"],
+    } | extra
+    d.add(dn, attrs, requester.dn)
+    return dn
+
+
+def test_anyone_files_a_request_but_only_as_themselves(setup):
+    alice = setup["alice"]
+    dn = _request(setup["other"], alice)
+    assert d.get(dn, ["crcRequestStatus"], alice.dn).first("crcRequestStatus") == "pending"
+    with pytest.raises(d.Denied):
+        _request(setup["other"], alice, crcRequestedByDn=[setup["anna"].dn])
+    with pytest.raises(d.Denied):
+        _request(setup["other"], setup["ext"])
+
+
+def test_requests_cannot_carry_credentials_or_a_decision(setup, admin):
+    alice = setup["alice"]
+    for extra in (
+        {"objectClass": ["crcRequest", "crcAccessRequest", "simpleSecurityObject"], "userPassword": ["heslo-123"]},
+        {"crcRequestStatus": ["approved"]},
+        {"crcDecidedBy": [admin.id]},
+        {"crcAccessSubject": [setup["bob"].id]},
+        {"authzTo": ["dn.regex:.*"]},
+    ):
+        with pytest.raises(d.Denied):
+            _request(setup["other"], alice, **extra)
+
+
+def test_request_readers(setup, world):
+    other_chair = world.chair(setup["other"], "Olga Cizí")
+    home_chair = world.chair(setup["home"], "Hana Domácí")
+    dn = _request(setup["other"], setup["alice"], crcRequestNotify=[home_chair.dn])
+    for reader in (setup["alice"], other_chair, home_chair):
+        assert d.get(dn, ["crcRequestStatus"], reader.dn) is not None
+    for reader in (setup["anna"], setup["bob"]):
+        assert d.get(dn, ["crcRequestStatus"], reader.dn) is None
+
+
+def test_only_the_units_chair_decides(setup, world):
+    other_chair = world.chair(setup["other"], "Olga Cizí")
+    home_chair = world.chair(setup["home"], "Hana Domácí")
+    dn = _request(setup["other"], setup["alice"], crcRequestNotify=[home_chair.dn])
+    for person in (setup["alice"], home_chair, setup["bob"]):
+        with pytest.raises(d.Denied):
+            d.modify(dn, {"crcRequestStatus": ["approved"]}, person.dn)
+    with pytest.raises(d.Denied):
+        d.modify(dn, {"crcAccessName": ["Někdo jiný"]}, other_chair.dn)
+    d.swap(dn, "crcRequestStatus", "pending", "approved", other_chair.dn, {"crcAccessSubject": [setup["bob"].id]})
+    with pytest.raises(d.Denied):
+        d.delete(dn, other_chair.dn)
+
+
+def test_notify_and_requester_follow_moves(setup, admin):
+    dn = _request(setup["other"], setup["alice"], crcRequestNotify=[setup["anna"].dn])
+    people.move_person(setup["alice"], setup["other"], admin.dn, setup["alice"].csn)
+    people.move_person(setup["anna"], setup["other"], admin.dn, setup["anna"].csn)
+    time.sleep(0.5)  # refint rewrites asynchronously
+    entry = d.get(dn, ["crcRequestedByDn", "crcRequestNotify"], admin.dn)
+    assert entry.first("crcRequestedByDn").lower().endswith(setup["other"].dn.lower())
+    assert entry.first("crcRequestNotify").lower().endswith(setup["other"].dn.lower())
+
+
+# ── Per-person grants ────────────────────────────────────────────────────────
+
+
+def test_person_grant_shows_just_that_person(setup, world, admin):
+    bob, alice = setup["bob"], setup["alice"]
+    bella = world.person(setup["other"], "Bella Cizí")
+    people.create_grant(alice.id, bob, "contact", None, "", admin.id, None)
+    people.create_grant(alice.id, bob, "basic", None, "", admin.id, None)
+    assert level(bob, alice.dn) == "contact"
+    assert level(bella, alice.dn) == "none"
+    assert level(bob, setup["anna"].dn) == "none"
+    grant = people.list_grants(admin.dn, f"(&(crcGrantee={alice.id})(crcGrantTarget={bob.readers_dn('contact')}))")[0]
+    assert grant.target_owner_dn.lower() == bob.dn.lower()
+    people.create_grant(alice.id, bob, "contact", None, "", admin.id, None)  # group exists already
+    people.revoke_grant(grant, None)
+    assert level(bob, alice.dn) == "contact"  # the other grant still holds
+    for grant in people.list_grants(
+        admin.dn, f"(&(crcGrantee={alice.id})(crcGrantTarget={bob.readers_dn('contact')}))"
+    ):
+        people.revoke_grant(grant, None)
+    assert level(bob, alice.dn) == "basic"
+
+
+def test_person_grant_follows_a_move(setup, admin):
+    bob, alice = setup["bob"], setup["alice"]
+    people.create_grant(alice.id, bob, "contact", None, "", admin.id, None)
+    people.move_person(bob, setup["home"], admin.dn, bob.csn)
+    moved = people.find_person(bob.id, admin.dn)
+    time.sleep(0.5)  # refint rewrites asynchronously
+    grant = people.list_grants(admin.dn, f"(crcGrantee={alice.id})")[0]
+    assert grant.target_dn.lower() == moved.readers_dn("contact").lower()
+
+
+def test_only_memberbase_fills_person_readers_groups(setup, admin, world):
+    chair = world.chair(setup["other"], "Olga Cizí")
+    group = {"objectClass": ["crcGroup"], "cn": ["readers-basic"]}
+    with pytest.raises(d.Denied):
+        d.add(setup["bob"].readers_dn("basic"), group, chair.dn)
+    people.create_grant(chair.id, setup["bob"], "basic", None, "", chair.id, None)
+    with pytest.raises(d.Denied):
+        d.add_values(setup["bob"].readers_dn("basic"), "member", [setup["alice"].dn], chair.dn)
+
+
+# ── Service account: carrying out requests and the members job ──────────────
+
+
+def test_memberbase_service_moves_people(setup):
+    people.move_person(setup["bob"], setup["home"], None, None)
+    assert people.find_person(setup["bob"].id, None).unit_dn.lower() == setup["home"].dn.lower()
+
+
+def test_members_job_strips_archived_people_of_roles_and_chair(setup, world, admin):
+    chair = world.chair(setup["home"], "Klára Končící", roles=["medcover:member"])
+    d.modify(chair.dn, {"crcMemberStatus": ["former"]}, admin.dn)
+    assert people.repair_members() >= 2
+    assert people.roles_of(chair.dn) == set()
+    assert people.chairs_of(chair.dn) == set()
+
+
+def test_chair_cannot_reopen_or_self_file_requests(setup, world, admin):
+    other_chair = world.chair(setup["other"], "Olga Cizí")
+    dn = _request(setup["other"], setup["alice"])
+    d.swap(dn, "crcRequestStatus", "pending", "approved", other_chair.dn)
+    d.swap(dn, "crcRequestStatus", "approved", "done", other_chair.dn)
+    for old, new in [("done", "pending"), ("done", "approved")]:
+        with pytest.raises(d.Denied):
+            d.swap(dn, "crcRequestStatus", old, new, other_chair.dn)
+    with pytest.raises(d.Denied):
+        d.modify(dn, {"crcRequestStatus": ["pending"]}, other_chair.dn)
+    with pytest.raises(d.Denied):
+        _request(setup["other"], other_chair)
+
+
+def test_odd_times_in_requests_do_not_break_listing(setup, admin):
+    _request(setup["other"], setup["alice"], crcExpiresAt=["2099010100Z"])
+    [req] = approvals.list_requests(setup["alice"].dn)
+    assert req.expires_at.year == 2099 and req.requested_by_name == "Alice Domácí"
+    assert people.parse_ldap_time("20990101") is None

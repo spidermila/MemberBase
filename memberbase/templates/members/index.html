@@ -4,7 +4,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <h2 class="mb-0">{{ 'Archivovaní' if archived else 'Členové' }}</h2>
-  {% if me.can('member.edit') %}
+  {% if me.manages_people %}
   <a href="{{ url_for('members.create') }}" class="btn btn-danger btn-sm">+ Nová osoba</a>
   {% endif %}
 </div>

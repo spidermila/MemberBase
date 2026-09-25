@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import csrf %}
+{% block title %}Žádost o přístup k údajům – Evidence členů{% endblock %}
+{% block content %}
+<h2>Žádost o přístup k údajům</h2>
+<p class="text-body-secondary">Napište jména lidí, jejichž údaje potřebujete, a vyberte, do které místní skupiny patří. Každé místní skupině přijde jedna žádost; její předseda jména přiřadí svým členům a přístup schválí nebo zamítne. Uvidíte jen ty, které schválí.</p>
+<form method="post" class="card maxw-form">
+  {{ csrf() }}
+  <div class="card-body">
+    <div id="accessRows">
+      {% set names = form.getlist('name') %}{% set chosen = form.getlist('unit') %}
+      {% for i in range(rows) %}
+      <div class="row g-2 mb-2 access-row">
+        <div class="col-sm-6">
+          <input class="form-control" name="name" value="{{ names[i] if i < names|length else '' }}" maxlength="120"
+                 placeholder="Jméno a příjmení" aria-label="Jméno a příjmení">
+        </div>
+        <div class="col-sm-6">
+          <select class="form-select" name="unit" aria-label="Místní skupina">
+            <option value="">— Místní skupina —</option>
+            {% for u in units %}<option value="{{ u.id }}" {{ 'selected' if i < chosen|length and chosen[i] == u.id }}>{{ u.name }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary mb-3" id="addAccessRow">+ Další jméno</button>
+    <div class="mb-3">
+      <label class="form-label" for="level">Rozsah</label>
+      <select class="form-select" name="level" id="level" required>
+        {% for key, label in levels.items() %}<option value="{{ key }}" {{ 'selected' if form.get('level', 'contact') == key }}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="expires">Platnost do</label>
+      <input class="form-control maxw-200" type="date" name="expires" id="expires" value="{{ form.get('expires', '') }}">
+      <div class="form-text">Nevyplníte-li, platí přístup, dokud ho Admin nezruší.</div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="note">K čemu údaje potřebujete</label>
+      <input class="form-control" name="note" id="note" maxlength="200" required value="{{ form.get('note', '') }}"
+             placeholder="Např. humanitární sbírka v Poličce">
+    </div>
+    <button class="btn btn-danger">Odeslat žádost</button>
+    <a href="{{ url_for('requests.index') }}" class="btn btn-outline-secondary">Zpět</a>
+  </div>
+</form>
+{% endblock %}

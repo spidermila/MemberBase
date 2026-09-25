@@ -11,7 +11,7 @@
     {% for g in grants %}
       <tr class="{{ 'text-body-secondary' if g.expired }}">
         <td>{{ names.get(g.grantee, '?') }}</td>
-        <td>{{ unit_names.get(g.target_unit_dn.lower(), '?') }}</td>
+        <td>{{ owner_names.get(g.target_owner_dn.lower(), '?') }}</td>
         <td>{{ levels.get(g.level, g.level) }}</td>
         <td>{{ g.expires_at.strftime('%d. %m. %Y') if g.expires_at else 'trvale' }}</td>
         <td>{{ g.description }}</td>
