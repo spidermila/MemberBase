@@ -231,6 +231,7 @@
       "serviceAccountsEnabled": false,
       "frontchannelLogout": false,
       "rootUrl": "${MEDCOVER_URL}",
+      "baseUrl": "${MEDCOVER_URL}/",
       "redirectUris": [
         "${MEDCOVER_URL}/auth/callback",
         "${MEDCOVER_EXTRA_REDIRECT_URI:/auth/callback}"
