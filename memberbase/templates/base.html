@@ -45,6 +45,15 @@
           {% endif %}
         </ul>
         <ul class="navbar-nav">
+          {% if config.DEBUG and me and me.is_admin %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Admin</a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="{{ keycloak_admin_url }}" target="_blank" rel="noopener">Keycloak</a></li>
+              <li><a class="dropdown-item" href="{{ mailpit_url }}" target="_blank" rel="noopener">Mailpit</a></li>
+            </ul>
+          </li>
+          {% endif %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('main.changelog') }}">Změny ve verzích</a></li>
           {% if me %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('main.profile') }}">{{ me.person.name }}</a></li>

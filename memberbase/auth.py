@@ -13,7 +13,7 @@ from flask import Blueprint, Flask, abort, current_app, flash, g, redirect, rend
 from werkzeug.wrappers import Response
 
 from memberbase import people
-from memberbase.permissions import permissions_for
+from memberbase.permissions import ADMIN, permissions_for
 
 bp = Blueprint("auth", __name__)
 oauth = OAuth()
@@ -35,6 +35,10 @@ class Me:
     def can(self, permission: str) -> bool:
         return permission in self.permissions
 
+    @property
+    def is_admin(self) -> bool:
+        return f"memberbase:{ADMIN}" in self.roles
+
 
 def init_app(app: Flask) -> None:
     cfg = app.config
@@ -55,6 +59,13 @@ def init_app(app: Flask) -> None:
 def public_keycloak_url() -> str:
     """Keycloak's browser-facing base URL for the current request."""
     return current_app.config["KEYCLOAK_PUBLIC_URL"].format(
+        scheme=request.scheme, hostname=request.host.rsplit(":", 1)[0]
+    )
+
+
+def public_mailpit_url() -> str:
+    """Mailpit's browser-facing base URL for the current request (dev only)."""
+    return current_app.config["MAILPIT_PUBLIC_URL"].format(
         scheme=request.scheme, hostname=request.host.rsplit(":", 1)[0]
     )
 
