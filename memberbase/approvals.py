@@ -89,11 +89,6 @@ class Request:
         return TYPES.get(self.type, self.type)
 
 
-def _local(value: str) -> datetime | None:
-    moment = people.parse_ldap_time(value)
-    return moment.astimezone(people.PRAGUE) if moment else None
-
-
 def list_requests(as_dn: str, filterstr: str = "") -> list[Request]:
     """Requests the person may read, newest first. Requesters' names are read
     by the service account: the decider may not see the requester, and a name
@@ -118,8 +113,8 @@ def list_requests(as_dn: str, filterstr: str = "") -> list[Request]:
                 requested_by_name=names[e.first("crcRequestedByDn")],
                 note=e.first("description"),
                 csn=e.first("entryCSN"),
-                created_at=_local(e.first("createTimestamp")),
-                decided_at=_local(e.first("crcDecidedAt")),
+                created_at=people.local_time(e.first("createTimestamp")),
+                decided_at=people.local_time(e.first("crcDecidedAt")),
                 notify=e.all("crcRequestNotify"),
                 move_subject=e.first("crcMoveSubject"),
                 move_subject_name=e.first("crcMoveSubjectName"),
@@ -195,7 +190,7 @@ def file_access(
                 "crcRequestType": ["access"],
                 "crcAccessName": names[unit.id],
                 "crcAccessLevel": [level],
-                "crcExpiresAt": [expires_at.strftime("%Y%m%d%H%M%SZ")] if expires_at else [],
+                "crcExpiresAt": [people.ldap_time(expires_at)] if expires_at else [],
                 "description": [note],
             },
             as_dn,
@@ -246,10 +241,6 @@ def _requester(req: Request) -> people.Person | None:
     return person if person is not None and person.status == "active" else None
 
 
-def _is_admin(person: people.Person) -> bool:
-    return "memberbase:admin" in people.roles_of(person.dn)
-
-
 def _move(req: Request, me: Me) -> str | None:
     subject = people.find_person(req.move_subject, None)
     if (
@@ -264,8 +255,9 @@ def _move(req: Request, me: Me) -> str | None:
     requester = _requester(req)
     if requester is None:
         return "Žadatel už není aktivní."
-    by_admin = _is_admin(requester)
-    if not by_admin and subject.unit_dn.lower() not in people.chairs_of(requester.dn):
+    roles, chairs = people.memberships(requester.dn)
+    by_admin = people.ADMIN_ROLE in roles
+    if not by_admin and subject.unit_dn.lower() not in chairs:
         return "Žadatel není předsedou místní skupiny, ze které se osoba přesouvá."
     if not (by_admin or me.is_admin) and people.is_privileged(subject):
         return "Osobu s rozšířeným oprávněním nebo předsedu místní skupiny smí přesunout jen Admin."
@@ -277,8 +269,8 @@ def _grant(req: Request, me: Me, subjects: list[people.Person]) -> str | None:
     requester = _requester(req)
     if requester is None:
         return "Žadatel už není aktivní."
-    chairs = people.chairs_of(requester.dn)
-    if not (_is_admin(requester) or chairs):
+    roles, chairs = people.memberships(requester.dn)
+    if not (people.ADMIN_ROLE in roles or chairs):
         return "Žadatel už není předsedou místní skupiny ani Adminem."
     if req.unit.dn.lower() in chairs or requester.id == me.person.id:
         return "O přístupu nemůže rozhodnout sám žadatel."
@@ -295,7 +287,7 @@ def approver_emails(unit: people.Unit) -> list[str]:
     """Where to announce a new request: the Místní skupina's active Chairs,
     or the Admins if it has none. Read by the service account, because the
     requester may not see them; the addresses are never shown."""
-    admins = next(r.members for r in people.list_roles(None, with_members=True) if r.key == "memberbase:admin")
+    admins = next(r.members for r in people.list_roles(None, with_members=True) if r.key == people.ADMIN_ROLE)
     return _active_mails(people.chair_members(unit, None)) or _active_mails(admins)
 
 

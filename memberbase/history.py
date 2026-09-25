@@ -3,7 +3,7 @@ slapd writes it for every successful change, with the real person (proxied
 identity), old and new values; nobody can edit it."""
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from memberbase import approvals
 from memberbase import directory as d
@@ -11,7 +11,11 @@ from memberbase import people
 from memberbase.directory import escape_filter_chars
 
 ACCESSLOG_BASE = "cn=accesslog"
+ATTRS = ["reqStart", "reqType", "reqDN", "reqAuthzID", "reqMod", "reqOld", "reqNewSuperior"]
 LIMIT = 300
+# The global history reads only recent records: slapd refuses a search that
+# matches more than its size limit, and the log is never purged.
+RECENT_DAYS = 30
 
 TYPES = {"add": "Vytvoření", "modify": "Změna", "delete": "Odstranění", "modrdn": "Přesun"}
 ATTR_LABELS = {
@@ -69,7 +73,7 @@ OPS = {"+": "přidáno", "-": "odebráno", "=": "nastaveno", "": "smazáno"}
 
 @dataclass
 class Change:
-    when: datetime
+    when: datetime | None
     actor: str
     action: str
     target: str
@@ -85,9 +89,11 @@ class Labels:
             f"cn=memberbase,ou=services,{base}": "Evidence členů (automaticky)",
             f"cn=keycloak,ou=services,{base}": "Přihlašování (Keycloak)",
         }
-        for person in people.search_people(as_dn):
+        units = people.list_units(as_dn, include_external=True)
+        persons = people.search_people(as_dn, units=units)
+        for person in persons:
             self.dns[person.dn.lower()] = person.name
-        for unit in people.list_units(as_dn, include_external=True):
+        for unit in units:
             self.dns[unit.dn.lower()] = unit.name
             self.dns[unit.members_dn.lower()] = f"všichni z {unit.name}"
             for level, label in people.LEVELS.items():
@@ -95,12 +101,7 @@ class Labels:
         for role in people.list_roles(as_dn):
             self.dns[role.dn.lower()] = f"role {people.APPS[role.app]}: {role.label}"
         self.ids = {q.id: q.name for q in people.list_qualifications(as_dn)}
-        self.ids |= {p_id: name for p_id, name in self._person_ids()}
-
-    def _person_ids(self) -> list[tuple[str, str]]:
-        return [
-            (dn.split(",", 1)[0].removeprefix("uid="), name) for dn, name in self.dns.items() if dn.startswith("uid=")
-        ]
+        self.ids |= {p.id: p.name for p in persons}
 
     def dn(self, dn: str) -> str:
         key = dn.lower()
@@ -185,15 +186,12 @@ def changes(as_dn: str, person: people.Person | None = None) -> list[Change]:
             f"(reqMod=member:+ {dn})(reqMod=member:- {dn}))"
         )
     filterstr += ")"
-    attrs = ["reqStart", "reqType", "reqDN", "reqAuthzID", "reqMod", "reqOld", "reqNewSuperior"]
-    entries = d.search(ACCESSLOG_BASE, filterstr, attrs, as_dn=as_dn)
+    entries = d.search(ACCESSLOG_BASE, filterstr, ATTRS, as_dn=as_dn) if person else _recent(filterstr, as_dn)
     entries.sort(key=lambda e: e.first("reqStart"), reverse=True)
     labels = Labels(as_dn)
     return [
         Change(
-            when=datetime.strptime(e.first("reqStart")[:14], "%Y%m%d%H%M%S")
-            .replace(tzinfo=UTC)
-            .astimezone(people.PRAGUE),
+            when=people.local_time(e.first("reqStart")),
             actor=labels.dn(e.first("reqAuthzID")),
             action=TYPES.get(e.first("reqType"), e.first("reqType")),
             target=labels.dn(e.first("reqDN")),
@@ -201,3 +199,17 @@ def changes(as_dn: str, person: people.Person | None = None) -> list[Change]:
         )
         for e in entries[:LIMIT]
     ]
+
+
+def _recent(filterstr: str, as_dn: str) -> list[d.Entry]:
+    """Records of the last RECENT_DAYS, or of the last day after a burst of
+    changes too big for one search."""
+    # ponytail: over the size limit within one day still fails; add logpurge or paging if that happens
+    try:
+        return d.search(ACCESSLOG_BASE, f"(&(reqStart>={_ago(RECENT_DAYS)}){filterstr})", ATTRS, as_dn=as_dn)
+    except d.TooMany:
+        return d.search(ACCESSLOG_BASE, f"(&(reqStart>={_ago(1)}){filterstr})", ATTRS, as_dn=as_dn)
+
+
+def _ago(days: int) -> str:
+    return people.ldap_time(datetime.now(UTC) - timedelta(days=days))

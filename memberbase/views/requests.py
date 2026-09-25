@@ -68,7 +68,7 @@ def new_move(member_id: str) -> Response:
     elif approvals.list_requests(me().dn, pending):
         flash("Žádost o přesun této osoby už čeká na rozhodnutí.", "warning")
     else:
-        note = " ".join(request.form.get("note", "").split())[:200]
+        note = forms.clean_note(request.form.get("note", ""))
         _announce([approvals.file_move(person, target, note, me().person, me().dn)])
         flash(f"Žádost o přesun do „{target.name}“ je odeslána k rozhodnutí.", "success")
     return redirect(url_for("members.detail", member_id=person.id))
@@ -97,7 +97,7 @@ def new_access() -> str | Response:
                 names.setdefault(unit_id, []).append(name)
         level = form.get("level", "")
         expires_at, error = forms.clean_date(form.get("expires", ""))
-        note = " ".join(form.get("note", "").split())[:200]
+        note = forms.clean_note(form.get("note", ""))
         if error:
             errors.append(error)
         elif expires_at is not None and expires_at <= datetime.now(UTC):
@@ -125,7 +125,7 @@ def new_access() -> str | Response:
 
 
 def _members(req: approvals.Request) -> list[people.Person]:
-    return people.search_people(me().dn, unit=req.unit, statuses=["new", "invited", "active", "inactive"])
+    return people.search_people(me().dn, unit=req.unit, statuses=people.CURRENT_STATUSES)
 
 
 @bp.route("/<request_id>")

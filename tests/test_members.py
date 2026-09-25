@@ -195,7 +195,7 @@ def test_status_lifecycle(client, world, admin, kc):
     assert "Osoba je aktivní." in text(act("activate"))
     assert "archivována" in text(act("archive"))
     after = people.find_person(person.id, admin.dn)
-    assert after.status == "former" and people.roles_of(after.dn) == set()
+    assert after.status == "former" and people.memberships(after.dn)[0] == set()
     assert "Tuto změnu stavu nelze provést." in text(act("archive"))
     assert "obnovena jako neaktivní" in text(act("restore"))
     assert len([c for c in kc.calls if c.request.url.endswith("/logout")]) == 2
@@ -232,7 +232,7 @@ def test_move_between_branches_keeps_identity_roles_and_holdings(client, world, 
     client.post(f"/members/{person.id}/move", data={"unit": new.id, "csn": person.csn})
     moved = people.find_person(person.id, admin.dn)
     assert moved.unit_dn == new.dn and moved.entry_uuid == person.entry_uuid
-    assert people.roles_of(moved.dn) == {"medcover:member"}
+    assert people.memberships(moved.dn)[0] == {"medcover:member"}
     assert set(people.holdings_of(moved, admin.dn)) == {qual.id}
     assert moved.dn in people.d.get(new.members_dn, ["member"]).all("member")
     assert moved.dn not in people.d.get(old.members_dn, ["member"]).all("member")
@@ -272,14 +272,14 @@ def test_set_roles(client, world, admin):
     client.post(
         f"/members/{person.id}/roles", data={"roles": ["medcover:member", "memberbase:district-coordinator", "x:y"]}
     )
-    assert people.roles_of(person.dn) == {"medcover:member", "memberbase:district-coordinator"}
+    assert people.memberships(person.dn)[0] == {"medcover:member", "memberbase:district-coordinator"}
 
 
 def test_archived_person_gets_no_roles(client, world, admin):
     person = world.person(world.unit(), status="former")
     login(client, admin)
     page = text(client.post(f"/members/{person.id}/roles", data={"roles": ["medcover:member"]}, follow_redirects=True))
-    assert "Archivované osobě nelze" in page and people.roles_of(person.dn) == set()
+    assert "Archivované osobě nelze" in page and people.memberships(person.dn)[0] == set()
 
 
 def test_set_qualifications(client, world, admin):
@@ -309,9 +309,9 @@ def test_batch_roles(client, world, admin):
         )
     )
     assert "u 1 osob, 3 beze změny" in page
-    assert people.roles_of(b.dn) == {"medcover:member"} and people.roles_of(gone.dn) == set()
+    assert people.memberships(b.dn)[0] == {"medcover:member"} and people.memberships(gone.dn)[0] == set()
     client.post("/members/batch", data={"member_ids": [a.id, b.id], "role": "medcover:member", "action": "remove"})
-    assert people.roles_of(a.dn) == set() == people.roles_of(b.dn)
+    assert people.memberships(a.dn)[0] == set() == people.memberships(b.dn)[0]
     bad = client.post(
         "/members/batch", data={"member_ids": [a.id], "role": "x", "action": "add"}, follow_redirects=True
     )

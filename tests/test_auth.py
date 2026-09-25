@@ -182,7 +182,7 @@ def test_step_up_redirects_when_login_is_old(client, world, admin):
         f"/members/{person.id}/roles", data={"roles": ["medcover:member"]}, headers={"Referer": "/members/x"}
     )
     assert resp.headers["Location"].startswith("/login?next=/members/x&reauth=1")
-    assert people.roles_of(person.dn) == set()
+    assert people.memberships(person.dn)[0] == set()
 
 
 def test_security_headers(client):
