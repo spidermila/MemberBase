@@ -34,6 +34,7 @@ All notable changes to MemberBase are documented here. The format follows
 - Keycloak realm: logging out of MedCover returns to MedCover's login page instead of stopping at "Invalid redirect uri" (the `medcover` client now allows `${MEDCOVER_URL}/auth/login` after logout). (#5)
 - Keycloak login theme: after a password reset opened from the email in a new session, the „Účet byl aktualizován“ page links back to the application instead of ending there (a small `info.ftl` override; Keycloak itself hides the link there). The `medcover` client gets a base URL for that link. (#5)
 - Every date and time in the UI is shown in Prague time; invitation, grant and request dates were shown in UTC, and an expiry date showed as the next day. An expiry date entered in a form now ends at midnight Prague time instead of UTC, i.e. one or two hours earlier.
+- Clicking anywhere in a date field opens the calendar. Desktop Chrome used to open it only from the small calendar icon, so the field seemed to do nothing.
 
 ### Security
 - `olcAddContentAcl` is on: whoever adds an entry needs add access to every attribute in it. Nobody may set `authzTo`/`authzFrom` outside `ou=services`.

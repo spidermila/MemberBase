@@ -169,3 +169,15 @@ document.querySelectorAll("table.table-stack").forEach(function (table) {
     }
   }
 })();
+
+// Date fields: a click anywhere opens the calendar, not only on its icon.
+document.addEventListener("click", function (event) {
+  var input = event.target;
+  if (input instanceof HTMLInputElement && input.type === "date" && input.showPicker) {
+    try {
+      input.showPicker();
+    } catch (e) {
+      // Already open, or not allowed here: the browser's own behaviour stays.
+    }
+  }
+});
