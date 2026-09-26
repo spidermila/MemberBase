@@ -30,6 +30,12 @@ def admin(app) -> people.Person:
     return person
 
 
+def _split(name: str) -> tuple[str, str]:
+    """Surname and given name of a "Surname Given" test name."""
+    surname, _, given = name.partition(" ")
+    return surname, given
+
+
 class World:
     """Builds throwaway data as the bootstrap admin; unique names per test."""
 
@@ -39,9 +45,9 @@ class World:
     def unit(self, name: str | None = None) -> people.Unit:
         return people.create_unit(name or f"Skupina {uuid.uuid4().hex[:8]}", self.admin.dn)
 
-    def person(self, unit: people.Unit, name: str = "Jan Novák", status: str = "active", roles=(), **kw):
+    def person(self, unit: people.Unit, name: str = "Novák Jan", status: str = "active", roles=(), **kw):
         email = kw.get("email") or f"{uuid.uuid4().hex[:10]}@example.org"
-        person = people.create_person(name, email, kw.get("phone", "123456789"), unit, self.admin.dn)
+        person = people.create_person(*_split(name), email, kw.get("phone", "123456789"), unit, self.admin.dn)
         if status != "new":
             people.set_status(person, status, self.admin.dn)
         for key in roles:
@@ -51,7 +57,7 @@ class World:
         assert found is not None
         return found
 
-    def chair(self, unit: people.Unit, name: str = "Petra Předsedkyně", **kw):
+    def chair(self, unit: people.Unit, name: str = "Předsedkyně Petra", **kw):
         person = self.person(unit, name, **kw)
         people.set_chair(person, True, self.admin.dn)
         return person

@@ -78,10 +78,9 @@ def parse_ldap_time(value: str) -> datetime | None:
     return None
 
 
-def split_name(full_name: str) -> tuple[str, str]:
-    """inetOrgPerson needs a surname: the last word; the rest is the given name."""
-    parts = full_name.split()
-    return " ".join(parts[:-1]), parts[-1]
+def full_name(surname: str, given_name: str) -> str:
+    """Names are always shown surname first."""
+    return f"{surname} {given_name}".strip()
 
 
 # ── Units (Místní skupiny) ────────────────────────────────────────────────────
@@ -190,7 +189,8 @@ def rename_unit(unit: Unit, name: str, as_dn: str) -> None:
 class Person:
     dn: str
     id: str
-    name: str
+    surname: str
+    given_name: str
     email: str
     phone: str
     status: str
@@ -200,6 +200,11 @@ class Person:
     status_changed_at: datetime | None = None
     unit: Unit | None = None
     roles: set[str] = field(default_factory=set)
+
+    @property
+    def name(self) -> str:
+        # From sn and givenName, not cn: entries from before surname-first names keep "Given Surname" in cn.
+        return full_name(self.surname, self.given_name)
 
     @property
     def unit_dn(self) -> str:
@@ -218,7 +223,8 @@ def _person(entry: Entry) -> Person:
     return Person(
         dn=entry.dn,
         id=entry.first("crcMemberId"),
-        name=entry.first("cn"),
+        surname=entry.first("sn"),
+        given_name=entry.first("givenName"),
         email=entry.first("mail"),
         phone=entry.first("telephoneNumber"),
         status=entry.first("crcMemberStatus"),
@@ -290,18 +296,17 @@ def _first_person(entries: list[Entry], as_dn: str | None) -> Person | None:
     return person
 
 
-def create_person(name: str, email: str, phone: str, unit: Unit, as_dn: str) -> Person:
+def create_person(surname: str, given_name: str, email: str, phone: str, unit: Unit, as_dn: str) -> Person:
     member_id = new_id()
     dn = f"uid={member_id},{unit.dn}"
-    given, surname = split_name(name)
     d.add(
         dn,
         {
             "objectClass": ["inetOrgPerson", "crcMember"],
             "uid": [member_id],
             "crcMemberId": [member_id],
-            "cn": [name],
-            "givenName": [given] if given else [],
+            "cn": [full_name(surname, given_name)],
+            "givenName": [given_name] if given_name else [],
             "sn": [surname],
             "mail": [email],
             "telephoneNumber": [phone] if phone else [],
@@ -322,12 +327,13 @@ def create_person(name: str, email: str, phone: str, unit: Unit, as_dn: str) -> 
 
 
 def update_person(person: Person, changes: dict[str, str], as_dn: str, csn: str) -> None:
-    """Change name, email and/or phone. `csn` is the entryCSN the form was
-    built from; a concurrent change raises StaleEntry."""
+    """Change name (surname and given_name together), email and/or phone.
+    `csn` is the entryCSN the form was built from; a concurrent change raises
+    StaleEntry."""
     mods: dict[str, list[str]] = {}
-    if "name" in changes:
-        given, surname = split_name(changes["name"])
-        mods |= {"cn": [changes["name"]], "givenName": [given] if given else [], "sn": [surname]}
+    if "surname" in changes:
+        surname, given = changes["surname"], changes["given_name"]
+        mods |= {"cn": [full_name(surname, given)], "givenName": [given] if given else [], "sn": [surname]}
     if "email" in changes:
         mods["mail"] = [changes["email"]]
     if "phone" in changes:

@@ -284,10 +284,10 @@ def test_chair_cannot_edit_another_chair_or_themselves(setup, world, chair):
 
 
 def test_chair_creates_people_in_own_unit_only(setup, chair):
-    person = people.create_person("Nový Člen", f"n-{chair.id}@example.org", "", setup["home"], chair.dn)
+    person = people.create_person("Člen", "Nový", f"n-{chair.id}@example.org", "", setup["home"], chair.dn)
     assert person.unit_dn.lower() == setup["home"].dn.lower()
     with pytest.raises(d.Denied):
-        people.create_person("Cizí Člen", f"c-{chair.id}@example.org", "", setup["other"], chair.dn)
+        people.create_person("Člen", "Cizí", f"c-{chair.id}@example.org", "", setup["other"], chair.dn)
 
 
 def _person_attrs(unit, chair, **extra):

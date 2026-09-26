@@ -24,8 +24,12 @@
       <div class="card-header">Údaje</div>
       <div class="card-body">
         <div class="mb-3">
-          <label class="form-label" for="name">Celé jméno</label>
-          <input class="form-control" id="name" name="name" value="{{ person.name }}" required maxlength="120">
+          <label class="form-label" for="surname">Příjmení</label>
+          <input class="form-control" id="surname" name="surname" value="{{ person.surname }}" required maxlength="120">
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="given_name">Jméno</label>
+          <input class="form-control" id="given_name" name="given_name" value="{{ person.given_name }}" required maxlength="120">
         </div>
         <div class="mb-3">
           <label class="form-label" for="email">E-mail</label>
