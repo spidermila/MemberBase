@@ -39,12 +39,14 @@ def _back(person: people.Person) -> Response:
     return redirect(url_for("members.detail", member_id=person.id))
 
 
-def _clean_person(form: Mapping[str, str]) -> tuple[str, str, str, list[str]]:
-    """Name, email and phone from a form, and what is wrong with them."""
-    name, e1 = forms.clean_name(form.get("name", ""))
-    email, e2 = forms.clean_email(form.get("email", ""))
-    phone, e3 = forms.clean_phone(form.get("phone", ""))
-    return name, email, phone, [e for e in (e1, e2, e3) if e]
+def _clean_person(form: Mapping[str, str]) -> tuple[dict[str, str], list[str]]:
+    """Surname, given name, email and phone from a form, and what is wrong with them."""
+    surname, e1 = forms.clean_name(form.get("surname", ""), "příjmení")
+    given_name, e2 = forms.clean_name(form.get("given_name", ""))
+    email, e3 = forms.clean_email(form.get("email", ""))
+    phone, e4 = forms.clean_phone(form.get("phone", ""))
+    fields = {"surname": surname, "given_name": given_name, "email": email, "phone": phone}
+    return fields, [e for e in (e1, e2, e3, e4) if e]
 
 
 def _protected(person: people.Person) -> bool:
@@ -98,17 +100,17 @@ def create() -> str | Response:
         abort(403)
     form = request.form
     if request.method == "POST":
-        name, email, phone, errors = _clean_person(form)
+        fields, errors = _clean_person(form)
         unit = next((u for u in units if u.id == form.get("unit")), None)
         if unit is None:
             errors.append("Vyberte místní skupinu.")
         if not errors and unit is not None:
             try:
-                person = people.create_person(name, email, phone, unit, me().dn)
+                person = people.create_person(**fields, unit=unit, as_dn=me().dn)
             except Conflict:
                 errors.append(EMAIL_TAKEN)
             else:
-                flash(f"Osoba {name} je vytvořena.", "success")
+                flash(f"Osoba {person.name} je vytvořena.", "success")
                 if form.get("invite"):
                     _send_invite(person)
                 return _back(person)
@@ -159,13 +161,12 @@ def _notify_email_change(person: people.Person, new_email: str) -> None:
 @login_required
 def edit(member_id: str) -> Response:
     person = _managed_or_403(member_id, "member.edit")
-    name, email, phone, errors = _clean_person(request.form)
+    changes, errors = _clean_person(request.form)
     if errors:
         for error in errors:
             flash(error, "danger")
         return _back(person)
-    changes = {"name": name, "email": email, "phone": phone}
-    email_changed = email != person.email
+    email_changed = changes["email"] != person.email
     if email_changed and (redirect_to := step_up()):
         return redirect_to
     try:
@@ -179,7 +180,7 @@ def edit(member_id: str) -> Response:
     else:
         flash("Údaje uloženy.", "success")
         if email_changed:
-            _notify_email_change(person, email)
+            _notify_email_change(person, changes["email"])
     return _back(person)
 
 

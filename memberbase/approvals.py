@@ -200,16 +200,16 @@ def file_access(
     ]
 
 
-def _norm(text: str) -> str:
-    return " ".join(people.sort_key(text).split())
+def _words(text: str) -> list[str]:
+    return sorted(people.sort_key(text).split())
 
 
 def suggest(name: str, members: list[people.Person]) -> tuple[people.Person | None, list[people.Person]]:
-    """The one member whose name equals `name` ignoring case and accents (if
-    exactly one does), and the members sharing at least one word with it."""
-    exact = [p for p in members if _norm(p.name) == _norm(name)]
-    words = set(_norm(name).split())
-    similar = [p for p in members if words & set(_norm(p.name).split())]
+    """The one member whose name equals `name` ignoring case, accents and word
+    order (if exactly one does), and the members sharing at least one word with it."""
+    exact = [p for p in members if _words(p.name) == _words(name)]
+    words = set(_words(name))
+    similar = [p for p in members if words & set(_words(p.name))]
     return (exact[0] if len(exact) == 1 else None), similar
 
 

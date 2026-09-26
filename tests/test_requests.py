@@ -370,7 +370,7 @@ def test_inactive_chair_means_admins_are_told(client, admin, cast, units, sent):
 def test_move_fails_if_name_does_not_match(client, admin, cast, units):
     file_move(client, cast, units)
     req = only(cast["src_chair"])
-    people.update_person(cast["jan"], {"name": "Jan Jiný"}, admin.dn, cast["jan"].csn)
+    people.update_person(cast["jan"], {"surname": "Jiný", "given_name": "Jan"}, admin.dn, cast["jan"].csn)
     assert "Jméno osoby se od podání žádosti změnilo" in approve_as(client, cast["dst_chair"], req.id)
 
 

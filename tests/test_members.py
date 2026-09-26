@@ -63,9 +63,16 @@ def test_create_member_and_invite(client, world, admin, kc):
     login(client, admin)
     resp = client.post(
         "/members/new",
-        data={"name": " Nová  Osoba ", "email": email.upper(), "phone": "777 123 456", "unit": unit.id, "invite": "1"},
+        data={
+            "surname": " Nová  Osoba ",
+            "given_name": " Eva ",
+            "email": email.upper(),
+            "phone": "777 123 456",
+            "unit": unit.id,
+            "invite": "1",
+        },
     )
-    person = people.search_people(admin.dn, "Nová Osoba", unit)[0]
+    person = people.search_people(admin.dn, "Nová Osoba Eva", unit)[0]
     assert resp.headers["Location"] == f"/members/{person.id}"
     assert (person.email, person.phone, person.status, person.kind) == (email, "777123456", "invited", "member")
     group = people.d.get(unit.members_dn, ["member"])
@@ -76,7 +83,7 @@ def test_create_member_and_invite(client, world, admin, kc):
 def test_create_external_user_without_invite(client, world, admin):
     login(client, admin)
     email = unique("host")
-    client.post("/members/new", data={"name": "Externí Host", "email": email, "unit": "external"})
+    client.post("/members/new", data={"surname": "Host", "given_name": "Externí", "email": email, "unit": "external"})
     person = people.search_people(admin.dn, email)[0]
     assert person.kind == "external" and person.unit.is_external
     assert (person.status, person.status_label) == ("new", "Nepozvaný")
@@ -84,8 +91,16 @@ def test_create_external_user_without_invite(client, world, admin):
 
 def test_create_reports_invalid_input(client, admin):
     login(client, admin)
-    page = text(client.post("/members/new", data={"name": "", "email": "x", "phone": "12", "unit": "nope"}))
-    for message in ["Vyplňte jméno.", "Zadejte platný e-mail.", "Telefon zadejte", "Vyberte místní skupinu."]:
+    page = text(
+        client.post("/members/new", data={"surname": "", "given_name": "", "email": "x", "phone": "12", "unit": "nope"})
+    )
+    for message in [
+        "Vyplňte příjmení.",
+        "Vyplňte jméno.",
+        "Zadejte platný e-mail.",
+        "Telefon zadejte",
+        "Vyberte místní skupinu.",
+    ]:
         assert message in page
 
 
@@ -94,7 +109,9 @@ def test_create_rejects_duplicate_email(client, world, admin):
     email = unique("dvojnik")
     world.person(unit, email=email)
     login(client, admin)
-    page = text(client.post("/members/new", data={"name": "Dvojník", "email": email, "unit": unit.id}))
+    page = text(
+        client.post("/members/new", data={"surname": "Dvojník", "given_name": "Karel", "email": email, "unit": unit.id})
+    )
     assert "Tento e-mail už používá jiná osoba." in page
 
 
@@ -104,7 +121,7 @@ def test_create_invite_failure_is_reported(client, world, admin, kc):
     email = unique("bezkc")
     resp = client.post(
         "/members/new",
-        data={"name": "Bez Keycloaku", "email": email, "unit": world.unit().id, "invite": "1"},
+        data={"surname": "Keycloaku", "given_name": "Bez", "email": email, "unit": world.unit().id, "invite": "1"},
         follow_redirects=True,
     )
     assert "Pozvánku se nepodařilo odeslat: user not found." in text(resp)
@@ -129,7 +146,7 @@ def test_detail_read_only_for_member(client, world):
     alice, anna = world.person(unit, "Alice Čtenářka"), world.person(unit, "Anna Čtená")
     login(client, alice)
     page = text(client.get(f"/members/{anna.id}"))
-    assert anna.email in page and 'name="name"' not in page and "Účet" not in page
+    assert anna.email in page and 'name="surname"' not in page and "Účet" not in page
 
 
 def test_detail_of_invisible_person_is_404(client, world):
@@ -144,10 +161,10 @@ def test_edit_person(client, world, admin, sent):
     login(client, admin)
     client.post(
         f"/members/{person.id}/edit",
-        data={"name": "Jana Nová", "email": person.email, "phone": "", "csn": person.csn},
+        data={"surname": "Nová", "given_name": "Jana", "email": person.email, "phone": "", "csn": person.csn},
     )
     after = people.find_person(person.id, admin.dn)
-    assert (after.name, after.phone) == ("Jana Nová", "")
+    assert (after.name, after.phone) == ("Nová Jana", "")
     assert sent == []
 
 
@@ -155,7 +172,13 @@ def test_edit_email_needs_recent_login_and_notifies_old_address(client, world, a
     person = world.person(world.unit())
     login(client, admin, auth_time=time.time() - 3600)
     new_email = unique("nova.adresa")
-    data = {"name": person.name, "email": new_email, "phone": "", "csn": person.csn}
+    data = {
+        "surname": person.surname,
+        "given_name": person.given_name,
+        "email": new_email,
+        "phone": "",
+        "csn": person.csn,
+    }
     resp = client.post(f"/members/{person.id}/edit", data=data)
     assert "reauth=1" in resp.headers["Location"]
     login(client, admin)
@@ -169,11 +192,27 @@ def test_edit_validation_stale_and_conflict(client, world, admin):
     person = world.person(unit)
     other = world.person(unit)
     login(client, admin)
-    page = text(client.post(f"/members/{person.id}/edit", data={"name": "", "email": "x"}, follow_redirects=True))
+    page = text(
+        client.post(
+            f"/members/{person.id}/edit", data={"surname": "", "given_name": "", "email": "x"}, follow_redirects=True
+        )
+    )
     assert "Vyplňte jméno." in page
-    stale = {"name": "Kdokoli", "email": person.email, "phone": "", "csn": "20000101000000.000000Z#000000#000#000000"}
+    stale = {
+        "surname": "Kdokoli",
+        "given_name": "Jan",
+        "email": person.email,
+        "phone": "",
+        "csn": "20000101000000.000000Z#000000#000#000000",
+    }
     assert "Záznam mezitím změnil" in text(client.post(f"/members/{person.id}/edit", data=stale, follow_redirects=True))
-    taken = {"name": person.name, "email": other.email, "phone": "", "csn": person.csn}
+    taken = {
+        "surname": person.surname,
+        "given_name": person.given_name,
+        "email": other.email,
+        "phone": "",
+        "csn": person.csn,
+    }
     assert "Tento e-mail už používá" in text(
         client.post(f"/members/{person.id}/edit", data=taken, follow_redirects=True)
     )

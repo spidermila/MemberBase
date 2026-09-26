@@ -12,12 +12,12 @@ MAX_NAME = 120
 MAX_NOTE = 200
 
 
-def clean_name(raw: str) -> tuple[str, str | None]:
+def clean_name(raw: str, label: str = "jméno") -> tuple[str, str | None]:
     name = " ".join(raw.split())
     if not name:
-        return name, "Vyplňte jméno."
+        return name, f"Vyplňte {label}."
     if len(name) > MAX_NAME:
-        return name, f"Jméno může mít nejvýše {MAX_NAME} znaků."
+        return name, f"{label.capitalize()} může mít nejvýše {MAX_NAME} znaků."
     return name, None
 
 

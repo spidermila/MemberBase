@@ -52,7 +52,7 @@ def test_plain_member_gets_no_management(client, world, home):
     assert client.get("/members/new").status_code == 403
     assert client.get("/members/invites").status_code == 403
     assert client.post("/members/invites/send", data={"member_ids": [other.id]}).status_code == 403
-    assert client.post(f"/members/{other.id}/edit", data={"name": "X"}).status_code == 403
+    assert client.post(f"/members/{other.id}/edit", data={"surname": "X"}).status_code == 403
     assert client.post(f"/members/{other.id}/status/deactivate").status_code == 403
     assert client.post(f"/members/{other.id}/qualifications").status_code == 403
 
@@ -60,10 +60,10 @@ def test_plain_member_gets_no_management(client, world, home):
 def test_chair_creates_member_in_own_unit_only(client, world, chair, home):
     other = world.unit()
     login(client, chair)
-    data = {"name": "Nový Člen", "email": unique("novy"), "unit": other.id}
+    data = {"surname": "Člen", "given_name": "Nový", "email": unique("novy"), "unit": other.id}
     assert "Vyberte místní skupinu." in text(client.post("/members/new", data=data, follow_redirects=True))
     client.post("/members/new", data=data | {"unit": home.id})
-    person = people.search_people(chair.dn, "Nový Člen", home)[0]
+    person = people.search_people(chair.dn, "Člen Nový", home)[0]
     # A Chair may not write cn=members: the person joins it at first login.
     assert person.dn not in people.d.get(home.members_dn, ["member"]).all("member")
     people.set_status(person, "invited", chair.dn)
@@ -86,15 +86,18 @@ def test_chair_edits_status_and_qualifications_in_own_unit(client, world, admin,
     login(client, chair)
     page = text(client.get(f"/members/{person.id}"))
     assert 'name="csn"' in page and "Uložit kvalifikace" in page and "Deaktivovat" in page
-    client.post(f"/members/{person.id}/edit", data={"name": "Jana Nová", "email": person.email, "csn": person.csn})
+    client.post(
+        f"/members/{person.id}/edit",
+        data={"surname": "Nová", "given_name": "Jana", "email": person.email, "csn": person.csn},
+    )
     client.post(f"/members/{person.id}/qualifications", data={"quals": [qual.id]})
     person = people.find_person(person.id, chair.dn)
     client.post(f"/members/{person.id}/status/deactivate", data={"csn": person.csn})
     person = people.find_person(person.id, chair.dn)
-    assert (person.name, person.status) == ("Jana Nová", "inactive")
+    assert (person.name, person.status) == ("Nová Jana", "inactive")
     assert set(people.holdings_of(person, chair.dn)) == {qual.id}
     # Other units: not even visible.
-    assert client.post(f"/members/{stranger.id}/edit", data={"name": "X"}).status_code == 404
+    assert client.post(f"/members/{stranger.id}/edit", data={"surname": "X"}).status_code == 404
 
 
 @pytest.mark.parametrize("role", ["memberbase:admin", "medcover:coordinator"])
@@ -104,7 +107,7 @@ def test_chair_cannot_change_privileged_people(client, world, chair, home, role)
     page = text(
         client.post(
             f"/members/{boss.id}/edit",
-            data={"name": "Změna", "email": boss.email, "csn": boss.csn},
+            data={"surname": "Změna", "given_name": "Jan", "email": boss.email, "csn": boss.csn},
             follow_redirects=True,
         )
     )

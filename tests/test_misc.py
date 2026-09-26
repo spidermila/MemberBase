@@ -111,9 +111,9 @@ def test_filter_escaping_blocks_injection(app, admin):
 def test_phone_search_and_partial_update(app, world, admin):
     person = world.person(world.unit(), phone="601234567")
     assert [p.id for p in people.search_people(admin.dn, "601 234")] == [person.id]
-    people.update_person(person, {"name": "Jen Jméno"}, admin.dn, person.csn)
+    people.update_person(person, {"surname": "Jméno", "given_name": ""}, admin.dn, person.csn)
     after = people.find_person(person.id, admin.dn)
-    assert (after.name, after.phone) == ("Jen Jméno", "601234567")
+    assert (after.name, after.phone) == ("Jméno", "601234567")
 
 
 def test_stale_move_of_external_user(app, world, admin):
@@ -143,8 +143,8 @@ def test_forms():
 
 
 def test_split_name_and_times():
-    assert people.split_name("Cher") == ("", "Cher")
-    assert people.split_name("Jan Petr Novák") == ("Jan Petr", "Novák")
+    assert people.full_name("Cher", "") == "Cher"
+    assert people.full_name("Novák", "Jan Petr") == "Novák Jan Petr"
     assert people.parse_ldap_time("") is None
 
 
