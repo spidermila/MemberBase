@@ -697,3 +697,76 @@ def test_medcover_grant_shows_only_active_people(setup, admin, status):
     _give_role(bob, "medcover:member", admin.dn)
     people.set_status(bob, status, admin.dn)
     assert level(bob, alice.dn) == "none"
+
+
+def _sync_modify(person: people.Person, *attempts: list) -> list[bool]:
+    """Try each list of modifications as the sync account; True where it succeeded."""
+    conn = service_conn("medcover-sync", os.environ["TEST_SYNC_PASSWORD"])
+    results = []
+    try:
+        for mods in attempts:
+            try:
+                conn.modify_s(person.dn, mods)
+                results.append(True)
+            except ldap.INSUFFICIENT_ACCESS:
+                results.append(False)
+    finally:
+        conn.unbind_s()
+    return results
+
+
+ACTIVATION = [
+    (ldap.MOD_DELETE, "crcMemberStatus", [b"invited"]),
+    (ldap.MOD_ADD, "crcMemberStatus", [b"active"]),
+    (ldap.MOD_REPLACE, "crcStatusChangedAt", [b"20260926120000Z"]),
+]
+
+
+@pytest.mark.parametrize("external", [False, True])
+def test_medcover_sync_activates_an_invited_medcover_user(setup, world, admin, external):
+    unit = world.external() if external else setup["home"]
+    person = world.person(unit, "Pozvaná Iva", status="invited", roles=["medcover:member"])
+    assert _sync_modify(person, ACTIVATION) == [True]
+    assert people.find_person(person.id, admin.dn).status == "active"
+
+
+def test_medcover_sync_does_not_activate_people_without_medcover_access(setup, world, admin):
+    person = world.person(setup["home"], "Bezpřístupová Iva", status="invited")
+    stamp = [(ldap.MOD_REPLACE, "crcStatusChangedAt", [b"20260926120000Z"])]
+    assert _sync_modify(person, ACTIVATION, stamp) == [False, False]
+    assert people.find_person(person.id, admin.dn).status == "invited"
+
+
+@pytest.mark.parametrize("status", ["new", "inactive", "former"])
+def test_medcover_sync_changes_no_other_status(setup, world, admin, status):
+    person = world.person(setup["home"], "Jiná Iva", status=status, roles=["medcover:member"])
+    attempts = (
+        [(ldap.MOD_DELETE, "crcMemberStatus", [status.encode()]), (ldap.MOD_ADD, "crcMemberStatus", [b"active"])],
+        [(ldap.MOD_REPLACE, "crcMemberStatus", [b"active"])],
+    )
+    assert _sync_modify(person, *attempts) == [False, False]
+    assert people.find_person(person.id, admin.dn).status == status
+
+
+def test_medcover_sync_cannot_deactivate_or_edit(setup, admin):
+    person = setup["alice"]
+    _give_role(person, "medcover:member", admin.dn)
+    attempts = (
+        [(ldap.MOD_DELETE, "crcMemberStatus", [b"active"]), (ldap.MOD_ADD, "crcMemberStatus", [b"inactive"])],
+        [(ldap.MOD_REPLACE, "mail", [b"x@example.org"])],
+        [(ldap.MOD_REPLACE, "crcStatusChangedAt", [b"19700101000000Z"])],  # only while invited
+    )
+    assert _sync_modify(person, *attempts) == [False, False, False]
+
+
+def test_medcover_sync_still_reads_the_status_of_medcover_users(setup, world, admin):
+    """The activation rules add rights; they must not replace the sync's read access."""
+    invited = world.person(setup["home"], "Pozvaná Věra", status="invited", roles=["medcover:member"])
+    _give_role(setup["alice"], "medcover:member", admin.dn)
+    conn = service_conn("medcover-sync", os.environ["TEST_SYNC_PASSWORD"])
+    try:
+        for person, status in ((setup["alice"], "active"), (invited, "invited")):
+            found = conn.search_s(person.dn, ldap.SCOPE_BASE, f"(crcMemberStatus={status})", ["crcMemberStatus"])
+            assert found == [(person.dn, {"crcMemberStatus": [status.encode()]})]
+    finally:
+        conn.unbind_s()

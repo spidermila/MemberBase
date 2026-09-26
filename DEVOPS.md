@@ -42,7 +42,7 @@ Everything MedCover relies on. A change to any row is a contract change (see
 | Item | Value |
 |---|---|
 | Directory service name | `openldap`, LDAPS on port 1636, CA certificate in the volume `memberbase-ldap-certs` (dev) or a secret (prod) |
-| Sync account | `cn=medcover-sync,ou=services,<base DN>`; which attributes and subtrees it may read is defined by the access rules in `deploy/openldap/ldif/access-rules.ldif` |
+| Sync account | `cn=medcover-sync,ou=services,<base DN>`; which attributes and subtrees it may read is defined by the access rules in `deploy/openldap/ldif/access-rules.ldif`. Its one write: activating an invited MedCover user at their first MedCover login, as a single modify of the person entry with delete `crcMemberStatus: invited`, add `crcMemberStatus: active` and replace `crcStatusChangedAt` (a replace of `crcMemberStatus` is refused). `noSuchAttribute` means the person is no longer invited (activated by MemberBase or changed meanwhile): read the status again. The directory cannot check that this happens only at a login; it trusts MedCover to activate only then |
 | Keycloak service name | `keycloak`, HTTP port 8080 inside the network |
 | OIDC issuer | `<Keycloak URL>/realms/crc` |
 | MedCover client | client ID `medcover`, confidential, redirect `<MedCover URL>/auth/callback`, back-channel logout `<MedCover URL>/auth/backchannel-logout` |
