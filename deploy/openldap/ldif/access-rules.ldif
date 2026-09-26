@@ -148,6 +148,25 @@ olcAccess: to dn.regex="^uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
   attrs=crcMemberStatus,crcStatusChangedAt,crcMemberKind,uid
   by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
   by * break
+# MedCover's sync account may activate an invited MedCover user: remove the
+# value "invited", add "active" and set the time of the change, only for
+# people holding a MedCover role and (for the time) only while they are still
+# invited. A matching clause ends the evaluation, so the status rules repeat
+# the read rights rule 9 gives the sync for MedCover users; nothing more. The directory cannot tell a login from
+# any other moment: it trusts MedCover to do this only at the person's first
+# MedCover login, right after Keycloak accepted them.
+olcAccess: to dn.regex="^(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
+  attrs=crcMemberStatus val=invited
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$1] & {{MEDCOVER_USERS}}" =rscxdz
+  by * break
+olcAccess: to dn.regex="^(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
+  attrs=crcMemberStatus val=active
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$1] & {{MEDCOVER_USERS}}" =rscxda
+  by * break
+olcAccess: to dn.regex="^(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
+  attrs=crcStatusChangedAt
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="([$1] & {{MEDCOVER_USERS}}) + ([$1]/crcMemberStatus & [invited])" =w
+  by * break
 olcAccess: to dn.subtree="ou=grants,{{BASE_DN}}"
   by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
   by * break
