@@ -247,6 +247,7 @@ def test_history_labels(app, admin):
     assert labels.dn("crcQualificationId=unknown,ou=x") == "kvalifikace"
     assert labels.dn("gidNumber=1+uidNumber=1,cn=peercred,cn=external,cn=auth") == "Správa serveru"
     assert labels.dn(f"cn=keycloak,ou=services,{base}") == "Přihlašování (Keycloak)"
+    assert labels.dn(f"cn=medcover-sync,ou=services,{base}") == "MedCover (automaticky)"
     assert labels.value("userPassword", "{ARGON2}x") == "••••"
     assert labels.value("crcMemberStatus", "former") == "Archivovaný"
     assert labels.value("crcCanBeRp", "FALSE") == "ne"

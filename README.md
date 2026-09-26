@@ -4,7 +4,9 @@ Member directory of an Oblastní spolek of the Czech Red Cross. One OpenLDAP
 directory holds people, passwords, app roles, qualifications and visibility
 grants; Keycloak is the only login (OIDC, TOTP, passkeys); this Flask app
 administers the directory. MedCover and future apps log in through the same
-Keycloak and read only what their own directory account allows.
+Keycloak and read only what their own directory account allows (MedCover's
+account may also activate an invited MedCover user at their first MedCover
+login).
 
 UI is Czech („Evidence členů“); code and docs are English.
 

@@ -92,6 +92,7 @@ class Labels:
         self.dns: dict[str, str] = {
             f"cn=memberbase,ou=services,{base}": "Evidence členů (automaticky)",
             f"cn=keycloak,ou=services,{base}": "Přihlašování (Keycloak)",
+            f"cn=medcover-sync,ou=services,{base}": "MedCover (automaticky)",
         }
         units = people.list_units(as_dn, include_external=True)
         persons = people.search_people(as_dn, units=units)
