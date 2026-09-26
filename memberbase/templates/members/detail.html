@@ -72,6 +72,13 @@
       </div>
     </div>
 
+    {% if held_roles is defined %}
+    <div class="card mt-3">
+      <div class="card-header">Role</div>
+      <div class="card-body">{% for r in held_roles %}{{ apps[r.app] }}: {{ r.label }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</div>
+    </div>
+    {% endif %}
+
     {% if can_certs or certs %}
     <div class="card mt-3">
       <div class="card-header d-flex align-items-center">Osvědčení

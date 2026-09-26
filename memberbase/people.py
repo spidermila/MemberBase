@@ -400,9 +400,9 @@ class Role:
         return f"{self.app}:{self.name}"
 
 
-def list_roles(as_dn: str | None, with_members: bool = False) -> list[Role]:
+def list_roles(as_dn: str | None, with_members: bool = False, apps: tuple[str, ...] = tuple(APPS)) -> list[Role]:
     roles = []
-    for app in APPS:
+    for app in apps:
         base = f"ou=roles,ou={app},ou=apps,{d.base_dn()}"
         attrs = ["cn", "description"] + (["member"] if with_members else [])
         for e in d.search(base, "(objectClass=crcGroup)", attrs, ldap.SCOPE_ONELEVEL, as_dn):
@@ -410,6 +410,15 @@ def list_roles(as_dn: str | None, with_members: bool = False) -> list[Role]:
             roles.append(Role(e.dn, app, e.first("cn"), e.first("description") or e.first("cn"), members))
     roles.sort(key=lambda r: (list(APPS).index(r.app), sort_key(r.label)))
     return roles
+
+
+# Holding any of these gives access to MedCover and the MedCover grant. The
+# directory's access rules use the same list (entrypoint.sh, MEDCOVER_USERS).
+MEDCOVER_ROLES = ("admin", "coordinator", "member", "viewer", "debriefing-manager")
+
+
+def has_medcover_access(role_keys: set[str]) -> bool:
+    return any(f"medcover:{role}" in role_keys for role in MEDCOVER_ROLES)
 
 
 def role_keys(person: Person, roles: list[Role]) -> set[str]:
