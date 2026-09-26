@@ -50,6 +50,11 @@ if [[ ! -f "$CONF/cn=config.ldif" ]]; then
     export R_DC=${first_rdn#dc=}
     export R_BASE_DN="$LDAP_BASE_DN" R_BASE_RE="$BASE_RE" R_ROOT="$ROOT" R_LOG_LEVEL="$LDAP_LOG_LEVEL"
     export R_OWN_BRANCH_CONTACT="$own_branch"
+    mc_users=""  # the MedCover roles, as in people.MEDCOVER_ROLES
+    for role in admin coordinator member viewer debriefing-manager; do
+        mc_users="${mc_users:+$mc_users | }[cn=$role,ou=roles,ou=medcover,ou=apps,${LDAP_BASE_DN}]/member"
+    done
+    export R_MEDCOVER_USERS="($mc_users)"
     export R_ACCESS_RULES
     R_ACCESS_RULES=$(render < "$TEMPLATES/access-rules.ldif" | grep -v '^#' | grep -v '^$')
     export R_DISTRICT_ID="${LDAP_DISTRICT_ID:-$(cat /proc/sys/kernel/random/uuid)}"

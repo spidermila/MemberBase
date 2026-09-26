@@ -117,12 +117,18 @@ def test_chair_cannot_change_privileged_people(client, world, chair, home, role)
     assert people.find_person(boss.id, chair.dn).status == "active"
 
 
-def test_chair_archives_and_the_job_removes_roles(client, world, chair, home, kc):
+@pytest.mark.parametrize("chair_role", [None, "medcover:viewer"])
+def test_chair_archives_and_the_job_removes_roles(client, world, admin, chair, home, kc, chair_role):
+    """A Chair with a MedCover role sees the role's members, but still may not change them."""
+    if chair_role:
+        role = next(r for r in people.list_roles(admin.dn) if r.key == chair_role)
+        people.toggle_role(chair, role, True, admin.dn)
     person = world.person(home, "Rudolf Rolový", roles=["medcover:member"])
     kc_user(kc, person.email)
     kc.post(f"{KC}/admin/realms/crc/users/kc-1/logout")
     login(client, chair)
-    client.post(f"/members/{person.id}/status/archive", data={"csn": person.csn})
+    resp = client.post(f"/members/{person.id}/status/archive", data={"csn": person.csn})
+    assert resp.status_code == 302 and kc.calls[-1].request.url.endswith("/logout")
     assert people.find_person(person.id, chair.dn).status == "former"
     assert people.memberships(person.dn)[0] == {"medcover:member"}
     assert people.repair_members() >= 1

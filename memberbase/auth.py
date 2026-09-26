@@ -52,6 +52,19 @@ class Me:
     def is_admin(self) -> bool:
         return people.ADMIN_ROLE in self.roles
 
+    @property
+    def has_medcover_access(self) -> bool:
+        return people.has_medcover_access(self.roles)
+
+    @property
+    def role_apps(self) -> tuple[str, ...]:
+        """Apps whose role holders this person may see: all with
+        member.view_all, MedCover's with MedCover access (the MedCover grant;
+        the directory enforces both)."""
+        if self.can("member.view_all"):
+            return tuple(people.APPS)
+        return ("medcover",) if self.has_medcover_access else ()
+
 
 def init_app(app: Flask) -> None:
     cfg = app.config

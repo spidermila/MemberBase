@@ -71,13 +71,15 @@ def index() -> str:
     archived = request.args.get("archived") == "1"
     statuses = ["former"] if archived else people.CURRENT_STATUSES
     found = people.search_people(me().dn, request.args.get("q", "").strip(), unit, statuses, units=units)
-    can_see_roles = me().can("member.view_all")
-    roles = people.list_roles(me().dn, with_members=can_see_roles)
+    can_see_roles = bool(me().role_apps)
+    roles = people.list_roles(me().dn, with_members=True, apps=me().role_apps)
     role_filter = request.args.get("role", "")
     if can_see_roles:
         for person in found:
             person.roles = people.role_keys(person, roles)
-        if role_filter:
+        if role_filter == "medcover":
+            found = [p for p in found if people.has_medcover_access(p.roles)]
+        elif role_filter:
             found = [p for p in found if role_filter in p.roles]
     return render_template(
         "members/index.html",
@@ -139,6 +141,9 @@ def detail(member_id: str) -> str:
     if me().can("role.assign"):
         ctx["roles"] = people.list_roles(me().dn, with_members=True)
         person.roles = people.role_keys(person, ctx["roles"])
+    elif me().role_apps:
+        readable = people.list_roles(me().dn, with_members=True, apps=me().role_apps)
+        ctx["held_roles"] = [r for r in readable if r.key in people.role_keys(person, readable)]
     ctx["quals"] = people.list_qualifications(me().dn)
     ctx["held"] = set(people.holdings_of(person, me().dn))
     if me().can("member.move"):
@@ -205,7 +210,8 @@ def change_status(member_id: str, action: str) -> Response:
     except Denied:
         flash(PRIVILEGED, "warning")
         return _back(person)
-    if status == "former":
+    if status == "former" and me().can("role.assign"):
+        # A Chair may not change roles; the nightly members job removes them.
         people.remove_all_roles(person, me().dn)
     flash(message, "success")
     if person.status in {"active", "invited"} and status in {"inactive", "former"}:

@@ -31,6 +31,15 @@ def test_member_list_search_filters_and_roles(client, world, admin):
     assert "MedCover: Coordinator" in page and 'id="batchToolbar"' in page
 
 
+def test_member_list_filters_people_with_medcover_access(client, world, admin):
+    unit = world.unit()
+    world.person(unit, "Eva Přístupová", roles=["medcover:viewer"])
+    world.person(unit, "Emil Bezpřístupový", roles=["memberbase:district-coordinator"])
+    login(client, admin)
+    page = text(client.get(f"/members/?unit={unit.id}&role=medcover"))
+    assert "Eva Přístupová" in page and "Emil Bezpřístupový" not in page
+
+
 def test_archived_view(client, world, admin):
     unit = world.unit()
     world.person(unit, "Dan Archivovaný", status="former")
@@ -147,6 +156,37 @@ def test_detail_read_only_for_member(client, world):
     login(client, alice)
     page = text(client.get(f"/members/{anna.id}"))
     assert anna.email in page and 'name="surname"' not in page and "Účet" not in page
+
+
+def test_medcover_users_see_each_other_with_medcover_roles(client, world):
+    alice = world.person(world.unit(), "Alice Medcoverová", roles=["medcover:member"])
+    bob = world.person(world.unit(), "Bob Medcoverový", roles=["medcover:coordinator"])
+    world.person(world.unit(), "Cyril Bezpřístupový")
+    login(client, alice)
+    page = text(client.get("/members/"))
+    assert "Bob Medcoverový" in page and "MedCover: Coordinator" in page and "Cyril Bezpřístupový" not in page
+    page = text(client.get(f"/members/{bob.id}"))
+    assert bob.email in page and "MedCover: Coordinator" in page
+    assert 'name="roles"' not in page
+    # Only MedCover role memberships are readable to them, so only those are offered.
+    assert "Evidence členů: Admin" not in text(client.get("/members/"))
+
+
+def test_member_without_medcover_access_sees_no_roles(client, world):
+    unit = world.unit()
+    alice, anna = world.person(unit, "Alice Bezpřístupová"), world.person(
+        unit, "Anna Medcoverová", roles=["medcover:member"]
+    )
+    login(client, alice)
+    assert "MedCover: Member" not in text(client.get(f"/members/{anna.id}"))
+
+
+def test_district_coordinator_sees_all_roles_on_a_person_page(client, world):
+    dc = world.person(world.unit(), "Dana Koordinátorová", roles=["memberbase:district-coordinator"])
+    boss = world.person(world.unit(), "Oto Admin", roles=["memberbase:admin", "medcover:viewer"])
+    login(client, dc)
+    page = text(client.get(f"/members/{boss.id}"))
+    assert "Evidence členů: Admin" in page and "MedCover: Viewer" in page and 'name="roles"' not in page
 
 
 def test_detail_of_invisible_person_is_404(client, world):
