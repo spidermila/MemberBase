@@ -1,6 +1,8 @@
 # Access rules of the main database, rendered into config.ldif by
 # entrypoint.sh. Placeholders: {{BASE_DN}}, {{BASE_RE}} (BASE_DN escaped for
-# regexes), {{OWN_BRANCH_CONTACT}}.
+# regexes), {{OWN_BRANCH_CONTACT}}, {{MEDCOVER_USERS}} (the union of the
+# member sets of the MedCover role groups, i.e. everyone with MedCover access;
+# entrypoint.sh builds it from the same role list as people.MEDCOVER_ROLES).
 #
 # Evaluation order matters: the first rule whose target matches decides; a
 # clause ending in "by * break" hands the remaining readers to later rules.
@@ -177,7 +179,18 @@ olcAccess: to dn.regex="^uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
   by * break
 olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
   attrs=entry,objectClass,uid,crcMemberId,cn,mail,telephoneNumber,crcMemberStatus,crcMemberKind,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil
-  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$2] & ([cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=member,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=viewer,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=debriefing-manager,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member)" read
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$2] & {{MEDCOVER_USERS}}" read
+  by * break
+# 10: MedCover users (anyone holding a MedCover role) see each other at the
+# contact level, with their qualifications, wherever they belong, whatever
+# the own-branch level; only active people are shown this way. "+" joins the
+# sets, so the result is empty unless the reader holds a MedCover role and
+# the target holds one and is active.
+# ponytail: the MedCover role groups are expanded for every reader; one
+# aggregate group of MedCover users would be cheaper at thousands of people.
+olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
+  attrs=entry,objectClass,uid,crcMemberId,cn,givenName,sn,mail,telephoneNumber,crcMemberStatus,crcMemberKind,crcStatusChangedAt,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil,entryCSN
+  by set.expand="(user & {{MEDCOVER_USERS}}) + ([$2] & {{MEDCOVER_USERS}}) + ([$2]/crcMemberStatus & [active])" read
   by * break
 # 11-13: visibility levels between people (see the design: basic = name and
 # Místní skupina, contact = + email and phone, extended = + later attributes,
@@ -230,6 +243,11 @@ olcAccess: to dn.regex="^crcCertificateId=[^,]+,(uid=[^,]+,(ou=[^,]+,ou=units|ou
 # MemberBase's own account removes archived people from roles (members job).
 olcAccess: to dn.subtree="ou=medcover,ou=apps,{{BASE_DN}}"
   by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" read
+  by * break
+# MedCover users see who holds which MedCover role.
+olcAccess: to dn.regex="^cn=[^,]+,ou=roles,ou=medcover,ou=apps,{{BASE_RE}}$"
+  attrs=member
+  by set="user & {{MEDCOVER_USERS}}" read
   by * break
 olcAccess: to dn.subtree="ou=apps,{{BASE_DN}}"
   attrs=member

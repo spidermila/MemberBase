@@ -26,6 +26,7 @@
     <label class="form-label small" for="role">Role</label>
     <select class="form-select" id="role" name="role">
       <option value="">Všechny</option>
+      <option value="medcover" {{ 'selected' if role_filter == 'medcover' }}>MedCover: s přístupem (jakákoli role)</option>
       {% for r in roles %}<option value="{{ r.key }}" {{ 'selected' if role_filter == r.key }}>{{ apps[r.app] }}: {{ r.label }}</option>{% endfor %}
     </select>
   </div>

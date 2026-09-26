@@ -645,3 +645,55 @@ def test_members_job_adds_missing_readers_groups(setup, admin):
     for dn in (setup["home"].readers_dn("records"), f"cn=readers-records,{people.external_dn()}"):
         with pytest.raises(d.Denied):
             d.delete(dn, None)  # the service account adds readers groups, never removes them
+
+
+def _give_role(person: people.Person, key: str, admin_dn: str) -> None:
+    people.toggle_role(person, next(r for r in people.list_roles(admin_dn) if r.key == key), True, admin_dn)
+
+
+def test_medcover_users_see_each_other_everywhere(setup, admin):
+    alice, bob, ext, anna = setup["alice"], setup["bob"], setup["ext"], setup["anna"]
+    for person, key in ((alice, "medcover:member"), (bob, "medcover:viewer"), (ext, "medcover:debriefing-manager")):
+        _give_role(person, key, admin.dn)
+    people.save_qualification(None, f"Kval MC {bob.id}", "", [], False, admin.dn)
+    qual = next(q for q in people.list_qualifications(admin.dn) if q.name == f"Kval MC {bob.id}")
+    people.set_holdings(bob, {qual.id}, admin.dn)
+
+    assert level(bob, alice.dn) == "contact" and level(alice, bob.dn) == "contact"
+    assert level(ext, alice.dn) == "contact" and level(alice, ext.dn) == "contact"
+    assert people.holdings_of(bob, alice.dn) != {}
+    # Their MedCover roles, not other apps' roles.
+    roles = {r.key: r.members for r in people.list_roles(alice.dn, with_members=True)}
+    assert bob.dn.lower() in roles["medcover:viewer"] and roles["memberbase:admin"] == set()
+    # Anna (own Místní skupina of Alice, no MedCover role) still sees only her own.
+    assert level(bob, anna.dn) == "none"
+    assert people.holdings_of(bob, anna.dn) == {}  # holdings are denied like the person
+
+
+def test_medcover_users_do_not_see_people_without_medcover_access(setup, admin):
+    alice, bob, ext = setup["alice"], setup["bob"], setup["ext"]
+    _give_role(alice, "medcover:coordinator", admin.dn)
+    _give_role(bob, "memberbase:district-coordinator", admin.dn)  # a role, but not MedCover's
+    assert level(bob, alice.dn) == "none" and level(ext, alice.dn) == "none"
+    assert level(alice, ext.dn) == "none"
+    roles = {r.key: r.members for r in people.list_roles(ext.dn, with_members=True)}
+    assert roles["medcover:coordinator"] == set()  # role holders stay hidden from non-MedCover users
+
+
+def test_removing_the_last_medcover_role_ends_the_medcover_grant(setup, admin):
+    alice, bob = setup["alice"], setup["bob"]
+    _give_role(alice, "medcover:member", admin.dn)
+    _give_role(bob, "medcover:member", admin.dn)
+    assert level(bob, alice.dn) == "contact"
+    role = next(r for r in people.list_roles(admin.dn) if r.key == "medcover:member")
+    people.toggle_role(bob, role, False, admin.dn)
+    assert level(bob, alice.dn) == "none" and level(alice, bob.dn) == "none"
+
+
+@pytest.mark.parametrize("status", ["inactive", "former"])
+def test_medcover_grant_shows_only_active_people(setup, admin, status):
+    alice, bob = setup["alice"], setup["bob"]
+    _give_role(alice, "medcover:member", admin.dn)
+    _give_role(bob, "medcover:member", admin.dn)
+    people.set_status(bob, status, admin.dn)
+    assert level(bob, alice.dn) == "none"

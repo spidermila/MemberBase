@@ -29,7 +29,9 @@ UI is Czech („Evidence členů“); code and docs are English.
   (name, email, phone). Other branches and external users are visible only
   through a grant, i.e. membership of `cn=readers-<level>` of the target
   branch or of one person (a person, or a branch's `cn=members` group).
-  District Coordinators read everything, Admins change everything, MS Chairs
+  MedCover access is a fixed grant: anyone holding a MedCover role reads
+  every other holder at the `contact` level, with their MedCover
+  qualifications and roles. District Coordinators read everything, Admins change everything, MS Chairs
   (`cn=chair` of a branch) change the people of their own branch.
 - Certificates („Osvědčení“) are `crcCertificate` entries under the person.
   Only the person, their Chairs, District Coordinators, Admins and holders of
