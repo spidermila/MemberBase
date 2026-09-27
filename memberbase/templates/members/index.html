@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import csrf, status_badge %}
+{% from "macros/ui.html" import csrf, role_lines, status_badge %}
 {% block title %}Členové – Evidence členů{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -90,7 +90,7 @@
         <td class="d-none d-md-table-cell">{{ p.phone }}</td>
         <td data-sort="{{ status_order.get(p.status, '') }}">{{ status_badge(p) }}</td>
         {% if can_see_roles %}
-        <td class="d-none d-lg-table-cell small">{% for r in roles if r.key in p.roles %}{{ apps[r.app] }}: {{ r.label }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        <td class="d-none d-lg-table-cell small">{{ role_lines(roles | selectattr('key', 'in', p.roles) | list, apps) }}</td>
         {% endif %}
       </tr>
       {% else %}

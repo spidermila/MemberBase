@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import cert_badge, cert_dates, csrf, status_badge %}
+{% from "macros/ui.html" import cert_badge, cert_dates, csrf, role_lines, status_badge %}
 {% block title %}{{ person.name }} – Evidence členů{% endblock %}
 {% block content %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -75,7 +75,7 @@
     {% if held_roles is defined %}
     <div class="card mt-3">
       <div class="card-header">Role</div>
-      <div class="card-body">{% for r in held_roles %}{{ apps[r.app] }}: {{ r.label }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</div>
+      <div class="card-body">{{ role_lines(held_roles, apps) or '—' }}</div>
     </div>
     {% endif %}
 

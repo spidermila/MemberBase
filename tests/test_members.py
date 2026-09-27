@@ -189,6 +189,15 @@ def test_district_coordinator_sees_all_roles_on_a_person_page(client, world):
     assert "Evidence členů: Admin" in page and "MedCover: Viewer" in page and 'name="roles"' not in page
 
 
+def test_roles_are_listed_once_per_app_on_their_own_lines(client, world):
+    roles = ["medcover:member", "medcover:coordinator", "memberbase:district-coordinator"]
+    pavel = world.person(world.unit(), "Pavel Vícerolový", roles=roles)
+    lines = "<div>MedCover: Coordinator, Member</div><div>Evidence členů: OS koordinátor</div>"
+    login(client, pavel)
+    for page in ("/members/", f"/members/{pavel.id}", "/profile"):
+        assert lines in text(client.get(page)), page
+
+
 def test_detail_of_invisible_person_is_404(client, world):
     alice = world.person(world.unit())
     bob = world.person(world.unit())

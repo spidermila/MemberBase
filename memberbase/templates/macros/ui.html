@@ -16,3 +16,11 @@
 {% macro cert_dates(cert) -%}
   {{ cert.issued.strftime('%d. %m. %Y') if cert.issued else '—' }} – {{ cert.expires.strftime('%d. %m. %Y') if cert.expires else 'bez omezení' }}
 {%- endmacro %}
+
+{#- Held roles, one line per app: "MedCover: Coordinator, Member". Empty when none. -#}
+{% macro role_lines(roles, apps) -%}
+  {%- for app, app_label in apps.items() -%}
+    {%- set labels = roles | selectattr('app', 'eq', app) | map(attribute='label') | list -%}
+    {%- if labels %}<div>{{ app_label }}: {{ labels | join(', ') }}</div>{% endif -%}
+  {%- endfor -%}
+{%- endmacro %}
