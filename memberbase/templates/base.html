@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
 <body>
-  <nav class="navbar navbar-expand-lg navbar-dark bg-danger">
+  <nav class="navbar navbar-expand-xxl navbar-dark bg-danger">
     <div class="container-fluid">
       <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main.index') }}">
         <img src="{{ url_for('static', filename='img/logo_nav.webp') }}" alt="" height="36" width="61">
@@ -34,9 +34,6 @@
           {% if me.can('unit.manage') %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.units') }}">Místní skupiny</a></li>
           {% endif %}
-          {% if me.can('qualification.manage') %}
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.qualifications') }}">Kvalifikace</a></li>
-          {% endif %}
           {% if me.can('grant.manage') %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.grants') }}">Sdílení údajů</a></li>
           {% endif %}
@@ -45,6 +42,14 @@
           {% endif %}
           {% if me.can('role.assign') %}
           <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.permissions') }}">Oprávnění rolí</a></li>
+          {% endif %}
+          {% if me.can('qualification.manage') %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">MedCover</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{{ url_for('admin.qualifications') }}">Kvalifikace</a></li>
+            </ul>
+          </li>
           {% endif %}
           {% endif %}
         </ul>
@@ -58,11 +63,18 @@
             </ul>
           </li>
           {% endif %}
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('main.changelog') }}">Změny ve verzích</a></li>
           {% if me %}
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('main.profile') }}">{{ me.person.name }}</a></li>
-          <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.logout') }}">Odhlásit</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">{{ me.person.name }}</a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="{{ url_for('main.profile') }}">Můj profil</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('main.changelog') }}">Změny ve verzích</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Odhlásit</a></li>
+            </ul>
+          </li>
           {% else %}
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('main.changelog') }}">Změny ve verzích</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.login') }}">Přihlásit se</a></li>
           {% endif %}
         </ul>
