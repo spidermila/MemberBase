@@ -28,6 +28,7 @@
 .navbar-dark .nav-link:focus { color: var(--color-navbar-text-hover); }
 
 .navbar-brand img { border-radius: 4px; }
+.navbar .nav-link { white-space: nowrap; }
 .maxw-340 { max-width: 340px; }
 .maxw-200 { max-width: 200px; }
 .col-check { width: 2rem; }
@@ -77,4 +78,5 @@ th[aria-sort="descending"] .sort-button::after { content: " ▼" / ""; }
   .form-check .form-check-input { margin-left: -2em; }
   .form-check-inline { margin-right: 1.25rem; }
   .navbar-collapse .nav-link { padding-block: .75rem; }
+  .navbar-collapse .dropdown-item { padding-block: .625rem; }
 }
