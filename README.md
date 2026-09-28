@@ -93,7 +93,10 @@ The OpenLDAP image initialises itself on first start from
 `LDAP_KEYCLOAK_PASSWORD`, `LDAP_MEDCOVER_SYNC_PASSWORD`,
 `LDAP_MEMBERBASE_PASSWORD`, `BOOTSTRAP_ADMIN_EMAIL` (and optional
 `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_UNIT_SLUG`, `BOOTSTRAP_UNIT_NAME`,
-`LDAP_BASE_DN`, `LDAP_OWN_BRANCH_LEVEL=contact|basic`). Root access is only
+`LDAP_BASE_DN`, `LDAP_OWN_BRANCH_LEVEL=contact|basic`), or from a backup with
+`RESTORE_FROM=<stamp>`. With `BACKUP_CONTAINER_URL` (and optional
+`BACKUP_TIME`, `AZURE_CLIENT_ID`) it backs up to Blob storage nightly; see
+`DEVOPS.md`. Root access is only
 possible inside the container over `ldapi:///`
 (`ldapsearch -Y EXTERNAL -H ldapi://%2Fvar%2Frun%2Fslapd%2Fldapi/ …`).
 

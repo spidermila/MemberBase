@@ -4,7 +4,7 @@
 FROM docker.io/library/debian:trixie-slim
 
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends slapd ldap-utils openssl ca-certificates \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends slapd ldap-utils openssl ca-certificates curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
     && rm -rf /etc/ldap/slapd.d /var/lib/ldap/* \
     && mkdir -p /var/lib/ldap /var/run/slapd /certs \
@@ -12,6 +12,7 @@ RUN apt-get update \
 
 COPY ldif/ /etc/ldap/memberbase/
 COPY entrypoint.sh /entrypoint.sh
+COPY directory-backup.sh /usr/local/bin/directory-backup
 
 USER openldap
 EXPOSE 1636

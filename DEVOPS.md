@@ -290,17 +290,60 @@ host opens the database, so:
   files.
 - Before going live, a drill on a test environment must show that slapd
   survives restarts, a new revision rollout and an SMB reconnect with its
-  data intact, and that a backup restores.
+  data intact, and that a backup restores into an empty share.
 
 ### Backups
 
-- **Directory:** a nightly `slapcat` of the main and `accesslog` databases,
-  run inside the `openldap` container, written to a dump directory on the
-  share. Azure Backup for the file share keeps 60 days of snapshots, off the
-  server (RPO 1 day, RTO 12 hours).
+- **Directory:** every night at `BACKUP_TIME` (UTC, default `02:00`) the
+  `openldap` container dumps `cn=config`, the main database and `accesslog`
+  with `slapcat`, proves the dump restores by loading it into a scratch
+  directory, and uploads it to Blob storage (`BACKUP_CONTAINER_URL`, the
+  container URL; the container app's managed identity authenticates, with
+  `AZURE_CLIENT_ID` for a user-assigned one). A backup is
+  `<stamp>/{config,main,accesslog}.ldif.gz` plus `<stamp>/SHA256SUMS`,
+  which is uploaded last: without it a backup is incomplete. The log says
+  `Directory backup <stamp> uploaded` or `Directory backup FAILED`; alert on
+  the second, and on the first missing for more than a day. An extra backup
+  (before a risky change): run `directory-backup backup` inside the
+  container (`az containerapp exec`).
+- **Why LDIF in Blob storage, not share snapshots:** a snapshot copies the
+  LMDB files as they are on the SMB share, the very storage we distrust; a
+  corrupted database would come back with it. LDIF is independent of the
+  storage, and `slapadd` builds a clean database from it. Blob storage also
+  keeps the backup away from the share it protects.
+- **Retention:** the container has a 20-day time-based immutability policy
+  (nobody, including the app, can delete or overwrite a backup in that time)
+  and a lifecycle rule that deletes backups after 30 days. Locally redundant
+  storage is accepted. RPO 1 day.
 - **Keycloak:** its Azure SQL database is backed up with MedCover's (TDE,
   point-in-time restore). It holds TOTP secrets, passkeys and sessions, so
-  it is restored together with the directory.
+  restore it to the time of the directory backup you restore.
+
+### Restoring the directory
+
+`scripts/directory-backups.sh` (az CLI, an Entra account with *Storage Blob
+Data Reader* on the container) lists the complete backups, prints one LDIF to
+look into (`show <stamp> main | grep …`) and downloads and verifies a backup.
+The restore itself is done by the `openldap` container on start:
+
+1. `BACKUP_ACCOUNT=<account> scripts/directory-backups.sh list` and pick a
+   stamp.
+2. Scale `openldap` to 0 and wait until the replica is gone.
+3. Give it an empty share (a new one; keep the damaged share for analysis).
+4. Set `RESTORE_FROM=<stamp>` and scale back to 1. The container downloads
+   the backup, checks every file against `SHA256SUMS`, loads it with
+   `slapadd` and starts; the log says `Directory restored from backup
+   <stamp>`. If anything fails it removes what it loaded and exits, so the
+   share stays empty. It never restores over an existing directory.
+5. Remove `RESTORE_FROM` (a new revision; while set on an existing directory
+   it is only logged and ignored).
+6. Restore the `keycloak` database to the backup's time (point-in-time
+   restore to a new database, then point Keycloak at it) and restart
+   `keycloak`.
+
+Everything changed after the backup is lost, including passwords set since
+then (those people use „Zapomenuté heslo“). MedCover's next sync follows the
+restored directory.
 
 ### Deploying a new version
 

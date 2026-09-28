@@ -1,7 +1,9 @@
 #!/bin/bash
 # First start: create a TLS certificate (unless one is mounted), render
-# cn=config and the initial tree from ldif/, load them with slapadd.
-# Every start: run slapd on LDAPS (port 1636) and the local ldapi socket.
+# cn=config and the initial tree from ldif/, load them with slapadd; or, with
+# RESTORE_FROM=<stamp>, load that backup instead (directory-backup).
+# Every start: run slapd on LDAPS (port 1636) and the local ldapi socket, and
+# with BACKUP_CONTAINER_URL set, back up to Blob storage nightly.
 set -euo pipefail
 
 : "${LDAP_BASE_DN:=dc=example,dc=org}"
@@ -34,7 +36,12 @@ render() {
     perl -e 'local $/; my $s = <STDIN>; $s =~ s/\{\{(\w+)\}\}/exists $ENV{"R_$1"} ? $ENV{"R_$1"} : die "unset: $1\n"/ge; print $s;'
 }
 
-if [[ ! -f "$CONF/cn=config.ldif" ]]; then
+export LDAP_BASE_DN
+if [[ -n "${RESTORE_FROM:-}" && -f "$CONF/cn=config.ldif" ]]; then
+    echo "RESTORE_FROM ignored: the directory already exists. Unset it."
+elif [[ -n "${RESTORE_FROM:-}" ]]; then
+    directory-backup restore "$RESTORE_FROM"
+elif [[ ! -f "$CONF/cn=config.ldif" ]]; then
     echo "Initialising directory ${LDAP_BASE_DN}"
     : "${LDAP_KEYCLOAK_PASSWORD:?required on first start}"
     : "${LDAP_MEDCOVER_SYNC_PASSWORD:?required on first start}"
@@ -78,6 +85,19 @@ if [[ ! -f "$CONF/cn=config.ldif" ]]; then
     slapadd -n 0 -F "$CONF" -l /tmp/config.ldif
     slapadd -F "$CONF" -b "$LDAP_BASE_DN" -l /tmp/tree.ldif
     rm -f /tmp/config.ldif /tmp/tree.ldif
+fi
+
+# Nightly backup at BACKUP_TIME (UTC), only where a backup container is set.
+if [[ -n "${BACKUP_CONTAINER_URL:-}" ]]; then
+    (
+        while true; do
+            now=$(date -u +%s)
+            wait=$(($(date -u -d "today ${BACKUP_TIME:-02:00}" +%s) - now))
+            ((wait > 0)) || wait=$((wait + 86400))
+            sleep "$wait"
+            directory-backup backup || echo "Directory backup FAILED" >&2
+        done
+    ) &
 fi
 
 exec slapd -d "${LDAP_DEBUG:-0}" -F "$CONF" -h "ldaps://:1636/ ldapi://%2Fvar%2Frun%2Fslapd%2Fldapi/"
