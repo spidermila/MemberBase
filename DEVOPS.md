@@ -337,10 +337,10 @@ programs without being copied into configuration:
   secret (`keyVaultUrl` plus the app's managed identity with the *Key Vault
   Secrets User* role), passed as `SMTP_PASSWORD` via `secretRef`. The other
   `SMTP_*` values and `MAIL_FROM` are plain environment variables.
-- **Keycloak:** its file vault. Set `KC_VAULT=file` and `KC_VAULT_DIR`
-  (build options, so part of the image build when it starts with
-  `--optimized`), mount the same Key Vault-backed secret as a secret volume
-  in that directory under the file name `crc_smtp-password` (realm, `_`, key),
+- **Keycloak:** its file vault. The `memberbase-keycloak` image is built
+  with `KC_VAULT=file` and reads secrets from `KC_VAULT_DIR`
+  (`/opt/keycloak/vault`). Mount the same Key Vault-backed secret as a
+  secret volume in that directory under the file name `crc_smtp-password` (realm, `_`, key),
   and enter `${vault.smtp-password}` as the password in the realm's email
   settings. The Keycloak database then holds only the reference, not the
   password. Leave `KC_SMTP_PASSWORD` unset.
@@ -357,8 +357,7 @@ the layout above:
 
 - [ ] This repository: `keycloak-db` (MSSQL) in `docker-compose.yml`, the
       `crc-dev` network and `memberbase-ldap-certs` volume names, the
-      reverse-proxy variables in `.env.example`, `release.yml`, the
-      `memberbase-keycloak` image, Dependabot.
+      reverse-proxy variables in `.env.example`, Dependabot.
 - [ ] MedCover: replace the `memberbase` profile with its overlay that joins
       `crc-dev`; update its `DEVOPS.md`.
 - [ ] Dev instance: stop and remove the MemberBase containers of the
