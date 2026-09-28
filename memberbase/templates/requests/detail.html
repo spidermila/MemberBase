@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/ui.html" import csrf %}
+{% from "macros/ui.html" import cert_badge, cert_dates, csrf %}
 {% block title %}{{ req.type_label }} – Evidence členů{% endblock %}
 {% block content %}
 <h2>{{ req.type_label }}</h2>
@@ -13,6 +13,9 @@
       <dt class="col-sm-4">Koho</dt><dd class="col-sm-8">{{ req.move_subject_name }}</dd>
       <dt class="col-sm-4">Odkud</dt><dd class="col-sm-8">{{ req.move_from.name if req.move_from else '—' }}</dd>
       <dt class="col-sm-4">Kam</dt><dd class="col-sm-8">{{ req.unit.name }}</dd>
+      {% elif req.type == 'certificates' %}
+      <dt class="col-sm-4">Místní skupina</dt><dd class="col-sm-8">{{ req.unit.name }}</dd>
+      <dt class="col-sm-4">Koho</dt><dd class="col-sm-8">{{ req.about }}</dd>
       {% else %}
       <dt class="col-sm-4">Čí údaje</dt><dd class="col-sm-8">{{ req.unit.name }}</dd>
       <dt class="col-sm-4">Rozsah</dt><dd class="col-sm-8">{{ levels.get(req.access_level, req.access_level) }}</dd>
@@ -44,15 +47,19 @@
   <div class="card-body">
     {% if req.type == 'move' %}
     <p>Po schválení se {{ req.move_subject_name }} přesune do „{{ req.unit.name }}“. Uvidí vaši místní skupinu a vy uvidíte jeho nebo její údaje.</p>
+    {% elif req.type == 'certificates' %}
+    <p>Doplňte nebo opravte v detailu osob jejich osvědčení a pak žádost schvalte. Žadatel v ní uvidí přehled osvědčení {{ 'vybraných osob' if req.named else 'všech současných členů místní skupiny „' ~ req.unit.name ~ '“' }}.</p>
+    {% if req.named %}<p>Ke každému jménu vyberte člena místní skupiny. Kde nikoho nevyberete, osoba v přehledu nebude.</p>{% endif %}
     {% else %}
     <p>Ke každému jménu vyberte člena místní skupiny. Kde nikoho nevyberete, přístup nedáte. Žadatel uvidí jen vybrané osoby v rozsahu „{{ levels.get(req.access_level, req.access_level) }}“.</p>
+    {% endif %}
     {% for name, match, similar in rows %}
     <div class="mb-3">
       <label class="form-label fw-semibold" for="subject{{ loop.index0 }}">{{ name }}</label>
       <input class="form-control form-control-sm mb-1 select-filter" type="search" data-filter="subject{{ loop.index0 }}"
              placeholder="Hledat v seznamu" aria-label="Hledat v seznamu">
       <select class="form-select" name="subject_{{ loop.index0 }}" id="subject{{ loop.index0 }}">
-        <option value="">— Nepovolit —</option>
+        <option value="">{{ '— Nezahrnout —' if req.type == 'certificates' else '— Nepovolit —' }}</option>
         {% if similar %}
         <optgroup label="Podobná jména">
           {% for p in similar %}<option value="{{ p.id }}" {{ 'selected' if match and match.id == p.id }}>{{ p.name }}{% if p.email %} ({{ p.email }}){% endif %}</option>{% endfor %}
@@ -65,13 +72,32 @@
       {% if not match %}<div class="form-text">Jméno jsme mezi členy místní skupiny přesně nenašli, vyberte ručně.</div>{% endif %}
     </div>
     {% endfor %}
-    {% endif %}
     <div class="d-flex gap-2">
       <button name="action" value="approve" class="btn btn-success">Schválit</button>
       <button name="action" value="reject" class="btn btn-outline-danger" data-confirm="Zamítnout žádost?">Zamítnout</button>
     </div>
   </div>
 </form>
+{% endif %}
+{% if report is defined %}
+<div class="card mb-3">
+  <div class="card-header">Přehled osvědčení</div>
+  <div class="table-responsive">
+    <table class="table align-middle table-stack mb-0">
+      <thead class="table-light"><tr><th>Osoba</th><th>Osvědčení</th></tr></thead>
+      <tbody>
+        {% for person, certs in report %}
+        <tr>
+          <td><a href="{{ url_for('members.detail', member_id=person.id) }}">{{ person.name }}</a></td>
+          <td>{% for c in certs %}<div>{{ c.name }} {{ cert_badge(c) }}<div class="small text-body-secondary">{{ c.issuer }} · {{ cert_dates(c) }}</div></div>{% else %}—{% endfor %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="2" class="text-body-secondary">Nikdo.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endif %}
 <a href="{{ url_for('requests.index') }}" class="btn btn-link mt-3 px-0">← Zpět na žádosti</a>
 {% endblock %}

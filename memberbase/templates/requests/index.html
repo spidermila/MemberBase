@@ -11,7 +11,7 @@
       <tr>
         <td class="text-nowrap"><a href="{{ url_for('requests.detail', request_id=r.id) }}">{{ r.created_at|local if r.created_at else '—' }}</a></td>
         <td>{{ r.type_label }}</td>
-        <td>{% if r.type == 'move' %}{{ r.move_subject_name }}{% else %}{{ r.access_names|join(', ') }}{% endif %}</td>
+        <td>{{ r.about }}</td>
         <td>{{ r.unit.name }}</td>
         <td class="d-none d-md-table-cell">{{ r.requested_by_name }}</td>
         <td>{{ r.status_label }}</td>
@@ -26,11 +26,11 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <h2 class="mb-0">Žádosti</h2>
-  {% if me.can('request.create') %}
-  <a href="{{ url_for('requests.new_access') }}" class="btn btn-danger btn-sm">+ Žádost o přístup k údajům</a>
+  {% if me.files_requests %}
+  <a href="{{ url_for('requests.new') }}" class="btn btn-danger btn-sm">+ Nová žádost</a>
   {% endif %}
 </div>
-<p class="text-body-secondary">O žádosti rozhoduje předseda místní skupiny, které se týká. O přesun osoby žádáte na její kartě.</p>
+<p class="text-body-secondary">O žádosti rozhoduje předseda místní skupiny, které se týká.{% if me.chairs %} O přesun osoby žádáte na její kartě.{% endif %}</p>
 <h5>Čekají na vaše rozhodnutí</h5>
 {{ table(to_decide, 'Nic nečeká.') }}
 <h5>Vaše žádosti</h5>

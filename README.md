@@ -38,10 +38,11 @@ UI is Czech („Evidence členů“); code and docs are English.
 - Certificates („Osvědčení“) are `crcCertificate` entries under the person.
   Only the person, their Chairs, District Coordinators, Admins and holders of
   a `records` grant read them; the rest of the branch does not.
-- Requests: moves between branches and access to named people are requested,
-  filed under the deciding branch (`ou=requests`) and decided by its Chairs.
-  MemberBase's own account carries out an approved request, since neither
-  side alone may write it.
+- Requests: moves between branches, access to named people and certificate
+  reports are requested, filed under the deciding branch (`ou=requests`) and
+  decided by its Chairs. MemberBase's own account carries out an approved
+  move or access request, since neither side alone may write it; a report
+  needs nothing carried out and is read live as the viewer.
 - Change log: slapd's `accesslog` records every change with the real person,
   old and new values; nobody can edit it.
 - Concurrent edits: writes carry an assertion on the `entryCSN` the form was

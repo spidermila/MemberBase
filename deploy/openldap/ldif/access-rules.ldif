@@ -31,10 +31,12 @@ olcAccess: to dn.subtree="ou=services,{{BASE_DN}}"
   by * none
 olcAccess: to attrs=authzTo,authzFrom
   by * none
-# 3: MemberBase Admins change everything, District Coordinators read everything.
+# 3: MemberBase Admins change everything. District Coordinators read
+# everything (rule 3n), after the Chair and request rules, so that a
+# coordinator who chairs a Místní skupina administers it like any Chair and
+# files and decides requests like anyone else.
 olcAccess: to dn.subtree="{{BASE_DN}}"
   by group/crcGroup/member.exact="cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" write
-  by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" read
   by * break
 # 3a-3f: MS Chairs (members of cn=chair of a Místní skupina) administer the
 # people of that Místní skupina: edit and change status, add new people,
@@ -140,6 +142,11 @@ olcAccess: to dn.regex="^crcRequestId=[^,]+,ou=requests,ou=([^,]+),ou=units,{{BA
   by dnattr=crcRequestedByDn read
   by dnattr=crcRequestNotify read
   by set.expand="[cn=chair,ou=$1,ou=units,{{BASE_DN}}]/member & user" read
+  by * break
+# 3n: District Coordinators read everything (see rule 3). Every clause of
+# 3a-3m before this either breaks or grants at least read.
+olcAccess: to dn.subtree="{{BASE_DN}}"
+  by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" read
   by * break
 # 4-6: MemberBase's own account (not proxied): looks up the person logging in,
 # activates invited people, reads app roles, runs the jobs, carries out

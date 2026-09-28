@@ -4,8 +4,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from memberbase import approvals, people
+from memberbase import approvals, mail, people
 from memberbase.directory import Denied
+from memberbase.permissions import REQUEST_PERMISSIONS
+from memberbase.views import requests as requests_view
 from tests.conftest import login, text
 from tests.test_access_rules import level
 
@@ -262,7 +264,7 @@ def test_chair_matches_names_and_grants_only_chosen_people(client, world, helper
     assert page.count("přesně nenašli") == 2 and "Podobná jména" in page
     # Nothing chosen: approving is refused.
     resp = client.post(f"/requests/{req.id}/decide", data={"action": "approve", "csn": req.csn}, follow_redirects=True)
-    assert "Nevybrali jste nikoho" in text(resp)
+    assert "Vyberte aspoň jednu osobu" in text(resp)
     sent.clear()
     data = {"action": "approve", "csn": req.csn, "subject_0": jan.id, "subject_1": jana.id, "subject_2": ""}
     resp = client.post(f"/requests/{req.id}/decide", data=data, follow_redirects=True)
@@ -396,3 +398,157 @@ def test_too_many_names_are_refused(client, helper, units):
     login(client, helper)
     data = {"name": ["Jan"] * 51, "unit": [units[0].id] * 51, "level": "basic", "note": "x"}
     assert "nejvýše o 50 jmen" in text(client.post("/requests/access", data=data))
+
+
+# ── New request page and certificate reports ────────────────────────────────
+
+
+def filed_by(person) -> list[approvals.Request]:
+    """Requests the person filed (an OS koordinátor reads all of them)."""
+    return [r for r in approvals.list_requests(person.dn) if r.requested_by_dn == person.dn]
+
+
+@pytest.fixture
+def coordinator(world):
+    """An OS koordinátor of a fourth unit."""
+    return world.person(world.unit(), "Olga Okresní", roles=["memberbase:district-coordinator"])
+
+
+def test_new_request_page_offers_what_the_person_may_file(client, admin, helper, coordinator, cast):
+    login(client, cast["jan"])
+    assert client.get("/requests/new").status_code == 403
+    assert "/requests/" not in text(client.get("/"))
+    login(client, helper)
+    page = text(client.get("/requests/new"))
+    assert "/requests/access" in page and "/requests/certificates" not in page
+    assert client.get("/requests/certificates").status_code == 403
+    login(client, coordinator)
+    assert "+ Nová žádost" in text(client.get("/requests/"))
+    page = text(client.get("/requests/new"))
+    assert "/requests/certificates" in page and "/requests/access" not in page
+    login(client, admin)
+    page = text(client.get("/requests/new"))
+    assert "Přístup k údajům" in page and "Přehled osvědčení" in page
+
+
+def test_every_request_type_on_the_new_page_has_a_permission():
+    assert set(requests_view.NEW_TYPES) == set(REQUEST_PERMISSIONS) <= set(approvals.TYPES)
+
+
+def test_external_coordinator_is_not_offered_requests(client, world, admin):
+    dc = world.person(world.external(), "Erik Vnější", roles=["memberbase:district-coordinator"])
+    login(client, dc)
+    assert "/requests/" not in text(client.get("/"))
+    assert client.get("/requests/new").status_code == 403
+    assert client.get("/requests/certificates").status_code == 403
+    ext_admin = world.person(world.external(), "Ema Vnější", roles=["memberbase:admin"])
+    login(client, ext_admin)
+    page = text(client.get("/requests/"))
+    assert "Čekají na vaše rozhodnutí" in page and "+ Nová žádost" not in page
+    assert client.get("/requests/access").status_code == 403
+
+
+def test_announcements_say_what_is_asked(client, monkeypatch, coordinator, helper, cast, units):
+    bodies: list[str] = []
+    monkeypatch.setattr(mail, "send", lambda to, subject, body: bodies.append(body) or True)
+    file_move(client, cast, units)
+    file_certificates(client, coordinator, units[1])
+    file_access(client, helper, units[0], ["Jan Stěhovavý"])
+    assert f"žádá o přesun osoby Jan Stěhovavý do místní skupiny „{units[1].name}“." in bodies[0]
+    assert f"žádá o přehled osvědčení členů místní skupiny „{units[1].name}“ (celá místní skupina)." in bodies[1]
+    assert f"žádá o přístup k údajům členů místní skupiny „{units[0].name}“: Jan Stěhovavý." in bodies[-1]
+
+
+def test_certificate_form_validation(client, coordinator, units):
+    login(client, coordinator)
+    page = text(client.get("/requests/certificates"))
+    assert units[0].name in page and page.count('name="name"') == 5
+    cases = [
+        ({"whole": [units[0].id], "note": " "}, "Napište, k čemu přehled potřebujete."),
+        ({"name": [""], "unit": [""], "note": "x"}, "Vyberte místní skupinu nebo napište aspoň jedno jméno."),
+        ({"name": ["Jan"], "unit": [""], "note": "x"}, "U jména „Jan“ vyberte místní skupinu."),
+        ({"name": ["Jan"] * 51, "unit": [units[0].id] * 51, "note": "x"}, "nejvýše o 50 jmen"),
+    ]
+    for data, message in cases:
+        assert message in text(client.post("/requests/certificates", data=data)), message
+    assert filed_by(coordinator) == []
+
+
+def test_chair_is_not_offered_their_own_unit(client, world, units):
+    own = world.unit()
+    chair = world.chair(own, "Karel Koordinující", roles=["memberbase:district-coordinator"])
+    login(client, chair)
+    page = text(client.get("/requests/certificates"))
+    assert units[0].name in page and own.name not in page
+
+
+def test_certificate_request_per_unit(client, coordinator, cast, units, sent):
+    login(client, coordinator)
+    data = {
+        "whole": [units[0].id, "unknown"],
+        "name": ["Jan Stěhovavý", "Dana Cílová"],
+        "unit": [units[0].id, units[1].id],
+        "note": "Hlášení o vzdělávání",
+    }
+    resp = client.post("/requests/certificates", data=data)
+    assert resp.headers["Location"] == "/requests/"
+    reqs = {r.unit.id: r for r in filed_by(coordinator)}
+    assert set(reqs) == {units[0].id, units[1].id}
+    assert (reqs[units[0].id].access_names, reqs[units[0].id].about) == ([], "celá místní skupina")
+    assert (reqs[units[1].id].type_label, reqs[units[1].id].about) == ("Přehled osvědčení", "Dana Cílová")
+    assert {to for to, _ in sent} == {cast["src_chair"].email, cast["co_chair"].email, cast["dst_chair"].email}
+    page = text(client.get("/requests/"))
+    assert "celá místní skupina" in page and "Dana Cílová" in page
+
+
+def file_certificates(client, coordinator, unit, names=()):
+    login(client, coordinator)
+    data = {"whole": [] if names else [unit.id], "name": list(names), "unit": [unit.id] * len(names), "note": "Hlášení"}
+    client.post("/requests/certificates", data=data)
+    return next(r for r in filed_by(coordinator) if r.pending)
+
+
+def test_whole_unit_report_after_the_chair_approves(client, world, admin, coordinator, cast, units, sent):
+    people.save_certificate(cast["jan"], None, "Zdravotník", "ČČK", datetime(2024, 1, 1).date(), None, admin.dn)
+    world.person(units[1], "Cizí Člověk")
+    req = file_certificates(client, coordinator, units[0])
+    assert "<th>Osoba</th>" not in text(client.get(f"/requests/{req.id}"))  # no report before it is done
+    login(client, cast["src_chair"])
+    page = text(client.get(f"/requests/{req.id}"))
+    assert "všech současných členů místní skupiny" in page and "Koho" in page
+    sent.clear()
+    resp = client.post(f"/requests/{req.id}/decide", data={"action": "approve", "csn": req.csn}, follow_redirects=True)
+    assert "Žádost je vyřízena." in text(resp)
+    assert sent == [(coordinator.email, "Žádost: Vyřízena")]
+    login(client, coordinator)
+    page = text(client.get(f"/requests/{req.id}"))
+    assert "<th>Osoba</th>" in page and "Zdravotník" in page
+    assert "Jan Stěhovavý" in page and "Sára Zdrojová" in page and "Cizí Člověk" not in page
+
+
+def test_named_report_shows_only_matched_people(client, world, admin, coordinator, cast, units):
+    req = file_certificates(client, coordinator, units[0], ["jan stehovavy", "Pepa Neznámý"])
+    page = text(client.get(f"/requests/{req.id}"))
+    assert "jan stehovavy, Pepa Neznámý" in page and "Zpřístupněno" not in page
+    login(client, cast["src_chair"])
+    page = text(client.get(f"/requests/{req.id}"))
+    assert "vybraných osob" in page and "— Nezahrnout —" in page
+    resp = client.post(f"/requests/{req.id}/decide", data={"action": "approve", "csn": req.csn}, follow_redirects=True)
+    assert "Vyberte aspoň jednu osobu" in text(resp)
+    page = approve_as(client, cast["src_chair"], req.id, subject_0=cast["jan"].id)
+    assert "Žádost je vyřízena." in page
+    assert filed_by(coordinator)[0].access_subjects == [cast["jan"].id]
+    login(client, coordinator)
+    page = text(client.get(f"/requests/{req.id}"))
+    assert "Jan Stěhovavý" in page and "Sára Zdrojová" not in page and "<td>—</td>" in page
+
+
+def test_empty_report(client, world, admin, coordinator):
+    unit = world.unit()
+    chair = world.chair(unit, "Petr Poslední")
+    req = file_certificates(client, coordinator, unit)
+    people.set_status(chair, "former", admin.dn)  # nobody current is left
+    login(client, admin)
+    client.post(f"/requests/{req.id}/decide", data={"action": "approve", "csn": req.csn})
+    login(client, coordinator)
+    assert "Nikdo." in text(client.get(f"/requests/{req.id}"))

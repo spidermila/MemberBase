@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Nová žádost – Evidence členů{% endblock %}
+{% block content %}
+<h2>Nová žádost</h2>
+<p class="text-body-secondary">Vyberte, o co chcete žádat.{% if me.chairs %} O přesun osoby žádáte na její kartě.{% endif %}</p>
+<div class="list-group maxw-form">
+  {% for label, endpoint, text in offered %}
+  <a href="{{ url_for(endpoint) }}" class="list-group-item list-group-item-action">
+    <div class="fw-semibold">{{ label }}</div>
+    <div class="small text-body-secondary">{{ text }}</div>
+  </a>
+  {% endfor %}
+</div>
+<a href="{{ url_for('requests.index') }}" class="btn btn-link mt-3 px-0">← Zpět na žádosti</a>
+{% endblock %}
