@@ -25,13 +25,16 @@ PERMISSION_LABELS = {
     "grant.manage": "Spravuje sdílení údajů",
     "history.view": "Vidí historii změn",
     "request.create": "Žádá o přístup k údajům osob z jiných místních skupin",
+    "request.certificates": "Žádá místní skupiny o přehled osvědčení",
 }
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     ADMIN: set(PERMISSION_LABELS),
-    DISTRICT_COORDINATOR: {"member.view_all"},
+    DISTRICT_COORDINATOR: {"member.view_all", "request.certificates"},
     CHAIR: {"request.create"},
 }
+# Request type → the permission to file it on the „Nová žádost“ page.
+REQUEST_PERMISSIONS = {"access": "request.create", "certificates": "request.certificates"}
 CHAIR_UNIT_PERMISSIONS = {"member.edit", "member.status", "qualification.manage", "certificate.manage"}
 
 

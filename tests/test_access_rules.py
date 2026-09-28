@@ -405,6 +405,52 @@ def test_anyone_files_a_request_but_only_as_themselves(setup):
         _request(setup["other"], setup["ext"])
 
 
+def test_district_coordinator_files_requests_only_as_themselves(setup, world, admin):
+    dc = world.person(setup["home"], "Dana Koordinátorka", roles=["memberbase:district-coordinator"])
+    report = {
+        "objectClass": ["crcRequest", "crcCertificateReportRequest"],
+        "crcRequestType": ["certificates"],
+        "crcAccessLevel": [],
+    }
+    dn = _request(setup["other"], dc, **report)
+    assert d.get(dn, ["crcRequestStatus"], dc.dn).first("crcRequestStatus") == "pending"
+    for extra in (
+        {"crcRequestedByDn": [setup["alice"].dn]},
+        {"crcRequestStatus": ["approved"]},
+        {"crcDecidedBy": [dc.id]},
+        {"crcAccessSubject": [setup["bob"].id]},
+    ):
+        with pytest.raises(d.Denied):
+            _request(setup["other"], dc, **report | extra)
+    with pytest.raises(d.Denied):  # nor decide it
+        d.swap(dn, "crcRequestStatus", "pending", "approved", dc.dn)
+    with pytest.raises(d.Denied):  # nor add a decision to it later
+        d.add_values(dn, "crcDecidedBy", [dc.id], dc.dn)
+    others = _request(setup["other"], setup["alice"])
+    assert d.get(others, ["crcAccessName"], dc.dn).first("crcAccessName") == "Bob Cizí"  # reads every request
+    with pytest.raises(d.Denied):  # but changes none of anyone else's
+        d.add_values(others, "description", ["Změna"], dc.dn)
+    people.set_chair(dc, True, admin.dn)
+    with pytest.raises(d.Denied):  # nor file under a Místní skupina they chair
+        _request(setup["home"], dc, **report)
+    ext_dc = world.person(world.external(), "Erik Koordinátor", roles=["memberbase:district-coordinator"])
+    with pytest.raises(d.Denied):  # nor from outside the Místní skupiny
+        _request(setup["other"], ext_dc, **report)
+
+
+def test_district_coordinator_who_chairs_decides_like_a_chair(setup, world, admin):
+    dc = world.chair(setup["other"], "Cecílie Předsedkyně", roles=["memberbase:district-coordinator"])
+    d.modify(setup["bob"].dn, {"telephoneNumber": ["987654321"]}, dc.dn)
+    _cert(setup["bob"], dc.dn)
+    with pytest.raises(d.Denied):  # a Chair's rights only in their own Místní skupina
+        d.modify(setup["alice"].dn, {"telephoneNumber": ["987654321"]}, dc.dn)
+    dn = _request(setup["other"], setup["alice"])
+    d.swap(dn, "crcRequestStatus", "pending", "approved", dc.dn, {"crcDecidedBy": [dc.id]})
+    d.swap(dn, "crcRequestStatus", "approved", "done", dc.dn)
+    with pytest.raises(d.Denied):
+        d.swap(dn, "crcRequestStatus", "done", "pending", dc.dn)
+
+
 def test_requests_cannot_carry_credentials_or_a_decision(setup, admin):
     alice = setup["alice"]
     for extra in (

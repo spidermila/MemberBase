@@ -24,3 +24,25 @@
     {%- if labels %}<div>{{ app_label }}: {{ labels | join(', ') }}</div>{% endif -%}
   {%- endfor -%}
 {%- endmacro %}
+
+{#- Rows of a typed name and its Místní skupina, for requests; app.js adds more. -#}
+{% macro name_rows(form, units, rows) -%}
+<div id="accessRows">
+  {% set names = form.getlist('name') %}{% set chosen = form.getlist('unit') %}
+  {% for i in range(rows) %}
+  <div class="row g-2 mb-2 access-row">
+    <div class="col-sm-6">
+      <input class="form-control" name="name" value="{{ names[i] if i < names|length else '' }}" maxlength="120"
+             placeholder="Příjmení a jméno" aria-label="Příjmení a jméno">
+    </div>
+    <div class="col-sm-6">
+      <select class="form-select" name="unit" aria-label="Místní skupina">
+        <option value="">— Místní skupina —</option>
+        {% for u in units %}<option value="{{ u.id }}" {{ 'selected' if i < chosen|length and chosen[i] == u.id }}>{{ u.name }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<button type="button" class="btn btn-sm btn-outline-secondary mb-3" id="addAccessRow">+ Další jméno</button>
+{%- endmacro %}

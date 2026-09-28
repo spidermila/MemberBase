@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "macros/ui.html" import csrf, name_rows %}
+{% block title %}Žádost o přehled osvědčení – Evidence členů{% endblock %}
+{% block content %}
+<h2>Žádost o přehled osvědčení</h2>
+<p class="text-body-secondary">Vyberte celé místní skupiny, nebo napište jména lidí a jejich místní skupinu. Každé místní skupině přijde jedna žádost; její předseda doplní osvědčení a žádost vyřídí. Pak v žádosti uvidíte přehled jejich osvědčení.</p>
+<form method="post" class="card maxw-form">
+  {{ csrf() }}
+  <div class="card-body">
+    <fieldset class="mb-3">
+      <legend class="form-label fs-6">Celé místní skupiny</legend>
+      {% set whole = form.getlist('whole') %}
+      {% for u in units %}
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="whole" value="{{ u.id }}" id="whole{{ loop.index0 }}" {{ 'checked' if u.id in whole }}>
+        <label class="form-check-label" for="whole{{ loop.index0 }}">{{ u.name }}</label>
+      </div>
+      {% endfor %}
+    </fieldset>
+    <p class="form-label">Nebo jen tito lidé</p>
+    {{ name_rows(form, units, rows) }}
+    <div class="mb-3">
+      <label class="form-label" for="note">K čemu přehled potřebujete</label>
+      <input class="form-control" name="note" id="note" maxlength="200" required value="{{ form.get('note', '') }}"
+             placeholder="Např. hlášení o vzdělávání za rok 2026">
+    </div>
+    <button class="btn btn-danger">Odeslat žádost</button>
+    <a href="{{ url_for('requests.new') }}" class="btn btn-outline-secondary">Zpět</a>
+  </div>
+</form>
+{% endblock %}

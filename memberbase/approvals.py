@@ -1,10 +1,13 @@
 """Requests („Žádosti“): someone asks, the Chairs of the Místní skupina the
-request is filed under decide (Admins may decide any). Two kinds:
+request is filed under decide (Admins may decide any). Three kinds:
 
 - move: a Chair asks to move one of their people into another Místní skupina;
   it is filed under the destination.
 - access: someone asks to see named people of a Místní skupina; the Chair
   matches the names to their people and approves some, all or none.
+- certificates: an OS koordinátor asks a Místní skupina for the certificates
+  of named people, or of all its people; the Chair brings them up to date and
+  approves, and the request then shows a report of them to whoever reads it.
 
 Filing and deciding run as the person. Carrying out an approved request runs
 as MemberBase's service account: no Chair may write both ends of a move, nor
@@ -15,6 +18,7 @@ the request; the other fields are only what the filer claims.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -27,7 +31,14 @@ from memberbase.directory import escape_filter_chars
 
 log = logging.getLogger(__name__)
 
-TYPES = {"move": "Přesun do místní skupiny", "access": "Přístup k údajům"}
+TYPES = {"move": "Přesun do místní skupiny", "access": "Přístup k údajům", "certificates": "Přehled osvědčení"}
+# What the requester asks for, as in „… žádá o <Request.wants>“.
+WANTS = {
+    "move": "přesun osoby {whom} do místní skupiny „{unit}“",
+    "access": "přístup k údajům členů místní skupiny „{unit}“: {whom}",
+    "certificates": "přehled osvědčení členů místní skupiny „{unit}“ ({about})",
+}
+NAMED_TYPES = {"access", "certificates"}
 STATUSES = {
     "pending": "Čeká na rozhodnutí",
     "approved": "Schválena",
@@ -87,6 +98,24 @@ class Request:
     @property
     def type_label(self) -> str:
         return TYPES.get(self.type, self.type)
+
+    @property
+    def named(self) -> bool:
+        """Whether the decider matches typed names (crcAccessName) to members."""
+        return self.type in NAMED_TYPES and bool(self.access_names)
+
+    @property
+    def whom(self) -> str:
+        """The people named in the request; empty if it concerns everyone."""
+        return self.move_subject_name if self.type == "move" else ", ".join(self.access_names)
+
+    @property
+    def about(self) -> str:
+        return self.whom or "celá místní skupina"
+
+    @property
+    def wants(self) -> str:
+        return WANTS[self.type].format(whom=self.whom, about=self.about, unit=self.unit.name)
 
 
 def list_requests(as_dn: str, filterstr: str = "") -> list[Request]:
@@ -170,6 +199,18 @@ def file_move(subject: people.Person, target: people.Unit, note: str, requester:
     )
 
 
+def _file_per_unit(
+    names: dict[str, list[str]],
+    units: list[people.Unit],
+    attrs: dict[str, list[str]],
+    requester: people.Person,
+    as_dn: str,
+) -> list[str]:
+    """One request per Místní skupina in `names` (unit id → names typed,
+    stored as crcAccessName). Returns the request ids."""
+    return [_file(u, requester, attrs | {"crcAccessName": names[u.id]}, as_dn) for u in units if u.id in names]
+
+
 def file_access(
     names: dict[str, list[str]],
     units: list[people.Unit],
@@ -179,25 +220,26 @@ def file_access(
     requester: people.Person,
     as_dn: str,
 ) -> list[str]:
-    """One request per Místní skupina (`names`: unit id → names typed).
-    Returns the request ids."""
-    return [
-        _file(
-            unit,
-            requester,
-            {
-                "objectClass": ["crcRequest", "crcAccessRequest"],
-                "crcRequestType": ["access"],
-                "crcAccessName": names[unit.id],
-                "crcAccessLevel": [level],
-                "crcExpiresAt": [people.ldap_time(expires_at)] if expires_at else [],
-                "description": [note],
-            },
-            as_dn,
-        )
-        for unit in units
-        if unit.id in names
-    ]
+    attrs = {
+        "objectClass": ["crcRequest", "crcAccessRequest"],
+        "crcRequestType": ["access"],
+        "crcAccessLevel": [level],
+        "crcExpiresAt": [people.ldap_time(expires_at)] if expires_at else [],
+        "description": [note],
+    }
+    return _file_per_unit(names, units, attrs, requester, as_dn)
+
+
+def file_certificates(
+    names: dict[str, list[str]], units: list[people.Unit], note: str, requester: people.Person, as_dn: str
+) -> list[str]:
+    """No names for a Místní skupina means all its current people."""
+    attrs = {
+        "objectClass": ["crcRequest", "crcCertificateReportRequest"],
+        "crcRequestType": ["certificates"],
+        "description": [note],
+    }
+    return _file_per_unit(names, units, attrs, requester, as_dn)
 
 
 def _words(text: str) -> list[str]:
@@ -218,15 +260,16 @@ def decide(req: Request, approve: bool, me: Me, subjects: list[people.Person]) -
     built from), then carry an approval out. Returns why it could not be
     carried out, or None."""
     changes = {"crcDecidedBy": [me.person.id], "crcDecidedAt": [people.now_ldap()]}
-    if approve and req.type == "access":
+    if approve and subjects:
         changes["crcAccessSubject"] = sorted(p.id for p in subjects)
     status = "approved" if approve else "rejected"
     d.swap(req.dn, "crcRequestStatus", "pending", status, me.dn, changes, csn=req.csn)
     if not approve:
         return None
+    carry_out = _CARRY_OUT.get(req.type)  # none: the Chair has done what was asked
     problem: str | None = "Adresář změnu odmítl."
     try:
-        problem = _move(req, me) if req.type == "move" else _grant(req, me, subjects)
+        problem = carry_out(req, me, subjects) if carry_out else None
     except d.Denied, d.StaleEntry, d.Conflict, ldap.LDAPError:
         log.exception("carrying out request %s failed", req.id)
     finally:
@@ -241,7 +284,7 @@ def _requester(req: Request) -> people.Person | None:
     return person if person is not None and person.status == "active" else None
 
 
-def _move(req: Request, me: Me) -> str | None:
+def _move(req: Request, me: Me, subjects: list[people.Person]) -> str | None:
     subject = people.find_person(req.move_subject, None)
     if (
         subject is None
@@ -281,6 +324,9 @@ def _grant(req: Request, me: Me, subjects: list[people.Person]) -> str | None:
     for person in subjects:
         people.create_grant(requester.id, person, req.access_level, req.expires_at, req.note, me.person.id, None)
     return None
+
+
+_CARRY_OUT: dict[str, Callable[[Request, Me, list[people.Person]], str | None]] = {"move": _move, "access": _grant}
 
 
 def approver_emails(unit: people.Unit) -> list[str]:

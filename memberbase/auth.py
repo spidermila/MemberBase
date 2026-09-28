@@ -13,7 +13,7 @@ from flask import Blueprint, Flask, abort, current_app, flash, g, redirect, rend
 from werkzeug.wrappers import Response
 
 from memberbase import people
-from memberbase.permissions import CHAIR, CHAIR_UNIT_PERMISSIONS, permissions_for
+from memberbase.permissions import CHAIR, CHAIR_UNIT_PERMISSIONS, REQUEST_PERMISSIONS, permissions_for
 
 bp = Blueprint("auth", __name__)
 oauth = OAuth()
@@ -43,6 +43,16 @@ class Me:
         """`permission` for the people of one Místní skupina: everywhere by
         role, or there as its Chair."""
         return self.can(permission) or (permission in CHAIR_UNIT_PERMISSIONS and self.is_chair_of(unit_dn))
+
+    def may_file(self, request_type: str) -> bool:
+        """Whether this person may file requests of this type; the directory
+        takes requests only from people of a Místní skupina."""
+        in_unit = self.person.unit_dn.lower() != people.external_dn().lower()
+        return in_unit and self.can(REQUEST_PERMISSIONS[request_type])
+
+    @property
+    def files_requests(self) -> bool:
+        return any(self.may_file(t) for t in REQUEST_PERMISSIONS)
 
     @property
     def manages_people(self) -> bool:
