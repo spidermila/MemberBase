@@ -47,6 +47,7 @@ All notable changes to MemberBase are documented here. The format follows
 - The change log database (`cn=accesslog`) has its own size limit of 50,000 entries instead of the global 5,000, so „Historie změn“ still loads after a busy day. Upgrading an existing directory: add `olcSizeLimit: 50000` to its database entry in `cn=config`. (#24)
 
 ### Fixed
+- Moving a person to or from the external users restores their Místní skupina's `cn=members` and their roles when any step before the rename fails, not only the rename itself; before, a failure while removing their roles left them out of their Místní skupina and not moved.
 - Keycloak realm: logging out of MedCover returns to MedCover's login page instead of stopping at "Invalid redirect uri" (the `medcover` client now allows `${MEDCOVER_URL}/auth/login` after logout). (#5)
 - Keycloak login theme: after a password reset opened from the email in a new session, the „Účet byl aktualizován“ page links back to the application instead of ending there (a small `info.ftl` override; Keycloak itself hides the link there). The `medcover` client gets a base URL for that link. (#5)
 - Every date and time in the UI is shown in Prague time; invitation, grant and request dates were shown in UTC, and an expiry date showed as the next day. An expiry date entered in a form now ends at midnight Prague time instead of UTC, i.e. one or two hours earlier.

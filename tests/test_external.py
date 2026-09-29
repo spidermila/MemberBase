@@ -150,6 +150,24 @@ def test_failed_move_keeps_the_roles(world, admin, monkeypatch):
     assert _roles(person) == {"medcover:member"}
 
 
+def test_move_failing_while_roles_are_removed_puts_everything_back(world, admin, monkeypatch):
+    unit = world.unit()
+    person = world.person(unit, roles=["medcover:member", "medcover:viewer"])
+    delete_values = directory.delete_values
+
+    def fail_on_viewer(dn, attr, values, as_dn):
+        if dn.startswith("cn=viewer,"):
+            raise directory.Denied()
+        delete_values(dn, attr, values, as_dn)
+
+    monkeypatch.setattr(directory, "delete_values", fail_on_viewer)
+    with pytest.raises(directory.Denied):
+        people.move_person(person, world.external(), admin.dn, person.csn)
+    assert _roles(person) == {"medcover:member", "medcover:viewer"}
+    assert person.dn in people.d.get(unit.members_dn, ["member"]).all("member")
+    assert people.find_person(person.id, admin.dn).kind == "member"
+
+
 def test_nobody_moves_themselves_to_external_users(client, world, admin):
     me = world.person(world.unit(), "Adam Správce", roles=["memberbase:admin"])
     other = world.person(world.unit(), "Jana Členka")
