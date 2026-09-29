@@ -369,20 +369,25 @@ def move_person(person: Person, target: Unit, as_dn: str | None, csn: str | None
 
     The rename runs under the form's entryCSN, so a concurrent edit fails
     cleanly. refint rewrites the person's DN in role and readers groups, but
-    asynchronously, so the old branch's cn=members entry is removed before
-    the rename (and put back if the rename fails). A failure after the
-    rename is fixed by the nightly members repair. Chairing the old
-    Místní skupina ends with the move. External users hold only the MedCover
-    role "external", so moving in or out swaps all roles for it or drops it.
+    asynchronously, so the old branch's cn=members entry (and, moving to or
+    from external users, the roles) is removed before the rename, and put back
+    if anything up to the rename fails. After the rename, a failure is fixed
+    by the nightly members repair for cn=members; the MedCover role "external"
+    of someone moved to external users must then be given on their page.
+    Chairing the old Místní skupina ends with the move. External users hold
+    only the MedCover role "external", so moving in or out swaps all roles for
+    it or drops it.
     """
     from_external = person.unit_dn.lower() == external_dn().lower()
     old_members = None if from_external else f"cn=members,{person.unit_dn}"
-    if old_members:
-        d.delete_values(f"cn=chair,{person.unit_dn}", "member", [person.dn], as_dn)
-        d.delete_values(old_members, "member", [person.dn], as_dn)
-    # Roles too go before the rename (refint is asynchronous).
-    _, old_roles = set_roles(person, set(), as_dn) if from_external != target.is_external else (set(), set())
+    crossing = from_external != target.is_external
+    old_roles = role_keys(person, list_roles(as_dn, with_members=True)) if crossing else set()
     try:
+        if old_members:
+            d.delete_values(f"cn=chair,{person.unit_dn}", "member", [person.dn], as_dn)
+            d.delete_values(old_members, "member", [person.dn], as_dn)
+        if crossing:
+            set_roles(person, set(), as_dn)
         new_dn = d.move(person.dn, target.dn, as_dn, csn=csn)
     except Exception:
         if old_members:
