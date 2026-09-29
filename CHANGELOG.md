@@ -6,6 +6,7 @@ All notable changes to MemberBase are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- „Můj profil“: the „Zabezpečení účtu“ card links to Keycloak's account console, where people see and remove their authenticator apps and passkeys and end sessions elsewhere; before, they could only add them. (#26)
 - OpenLDAP directory image (Debian `slapd`, LDAPS only, Argon2 hashes, `accesslog` change log) with the `crc` schema, the district tree and access rules enforcing Místní skupina visibility, grants and roles. (#1)
 - Keycloak realm `crc`: LDAP federation (passwords written through LDAP, everything else read-only), single sign-on for MemberBase and MedCover, mandatory second factor for admin roles, passkeys, Czech login theme in MedCover colours. (#1)
 - MemberBase („Evidence členů“) MVP: member list with search and filters, create/edit/move people, invitations, activate/deactivate/archive/restore, MedCover and MemberBase role assignment (also in batch), Místní skupiny, MedCover qualifications, visibility grants with expiry, change log from `accesslog`, second-factor reset, own profile. (#1)

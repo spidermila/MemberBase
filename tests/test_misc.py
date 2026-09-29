@@ -25,6 +25,7 @@ def test_profile_shows_own_data_roles_and_qualifications(client, world, admin):
     page = text(client.get("/profile"))
     assert "Petr Profil" in page and "MedCover: Member" in page and "Profilová kvalifikace" in page
     assert "kc_action=CONFIGURE_TOTP" in page
+    assert "/realms/crc/account/account-security/signing-in" in client.get("/profile").get_data(as_text=True)
 
 
 def test_profile_phone_update(client, world):
