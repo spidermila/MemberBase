@@ -39,16 +39,20 @@ class Me:
     def is_chair_of(self, unit_dn: str) -> bool:
         return unit_dn.lower() in self.chairs
 
+    def manages_unit(self, unit_dn: str) -> bool:
+        """Chairs this Místní skupina, or manages the external users."""
+        if unit_dn.lower() == people.external_dn().lower():
+            return self.can("external.manage")
+        return self.is_chair_of(unit_dn)
+
     def can_in_unit(self, permission: str, unit_dn: str) -> bool:
-        """`permission` for the people of one Místní skupina: everywhere by
-        role, or there as its Chair."""
-        return self.can(permission) or (permission in CHAIR_UNIT_PERMISSIONS and self.is_chair_of(unit_dn))
+        """`permission` for the people of one Místní skupina (or the external
+        users): everywhere by role, or there as the one who manages them."""
+        return self.can(permission) or (permission in CHAIR_UNIT_PERMISSIONS and self.manages_unit(unit_dn))
 
     def may_file(self, request_type: str) -> bool:
-        """Whether this person may file requests of this type; the directory
-        takes requests only from people of a Místní skupina."""
-        in_unit = self.person.unit_dn.lower() != people.external_dn().lower()
-        return in_unit and self.can(REQUEST_PERMISSIONS[request_type])
+        """Whether this person may file requests of this type."""
+        return self.can(REQUEST_PERMISSIONS[request_type])
 
     @property
     def files_requests(self) -> bool:
@@ -56,7 +60,7 @@ class Me:
 
     @property
     def manages_people(self) -> bool:
-        return self.can("member.edit") or bool(self.chairs)
+        return self.can("member.edit") or self.can("external.manage") or bool(self.chairs)
 
     @property
     def is_admin(self) -> bool:
@@ -114,9 +118,12 @@ def load_me() -> Response | None:
     if member_id is None or request.endpoint == "static":
         return None
     person = people.find_person(member_id, None, with_unit=False)
-    if person is None or person.status != "active":
+    if person is None or person.status != "active" or person.kind == "external":
         session.clear()
-        flash("Váš účet není aktivní.", "danger")
+        if person is not None and person.kind == "external":
+            flash("Externí uživatelé Evidenci členů nepoužívají. Přihlaste se do aplikace MedCover.", "danger")
+        else:
+            flash("Váš účet není aktivní.", "danger")
         return redirect(url_for("main.index"))
     app_roles, chairs = people.memberships(person.dn)
     mb_roles = {r.split(":", 1)[1] for r in app_roles if r.startswith("memberbase:")}
@@ -200,7 +207,7 @@ def login() -> Response:
 
 
 @bp.route("/auth/callback")
-def callback() -> str | Response:
+def callback() -> Response | tuple[str, int]:
     if "error" in request.args:
         # E.g. the person cancelled an account action in Keycloak.
         flash("Přihlášení nebo akce v účtu nebyla dokončena.", "warning")
@@ -210,11 +217,14 @@ def callback() -> str | Response:
     token = oauth.keycloak.authorize_access_token(claims_options={"iss": {"essential": True, "values": [issuer]}})
     claims = token["userinfo"]
     person = people.find_person(claims.get("crc_member_id", ""), None)
+    if person is not None and person.kind == "external":
+        # External users use MedCover only; MedCover activates them.
+        return render_template("errors/login_refused.html", external=True), 403
     if person is not None and person.status == "invited":
         people.activate_invited(person)
         person.status = "active"
     if person is None or person.status != "active":
-        return render_template("errors/login_refused.html"), 403  # type: ignore[return-value]
+        return render_template("errors/login_refused.html"), 403
     target = session.pop("next", url_for("main.index"))
     session.clear()
     session.permanent = True

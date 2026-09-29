@@ -54,7 +54,8 @@ olcDatabase: {0}config
 olcRootDN: {{ROOT}}
 olcAccess: {0}to * by dn.exact="{{ROOT}}" manage by * none
 
-# Change log. Written only by slapd; MemberBase Admins may read it.
+# Change log. Written only by slapd; MemberBase Admins may read it. Its own
+# size limit: the history page reads up to 30 days of changes at once.
 dn: olcDatabase={1}mdb,cn=config
 objectClass: olcDatabaseConfig
 objectClass: olcMdbConfig
@@ -62,6 +63,7 @@ olcDatabase: {1}mdb
 olcSuffix: cn=accesslog
 olcDbDirectory: /var/lib/ldap/accesslog
 olcRootDN: {{ROOT}}
+olcSizeLimit: 50000
 olcDbMaxSize: 1073741824
 olcDbIndex: objectClass,reqStart,reqDN,reqAuthzID,reqResult eq
 olcAccess: {0}to * by set="[cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member & user" read by * none

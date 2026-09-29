@@ -1,8 +1,12 @@
 # Access rules of the main database, rendered into config.ldif by
 # entrypoint.sh. Placeholders: {{BASE_DN}}, {{BASE_RE}} (BASE_DN escaped for
-# regexes), {{OWN_BRANCH_CONTACT}}, {{MEDCOVER_USERS}} (the union of the
-# member sets of the MedCover role groups, i.e. everyone with MedCover access;
-# entrypoint.sh builds it from the same role list as people.MEDCOVER_ROLES).
+# regexes), {{OWN_BRANCH_CONTACT}}.
+#
+# Everyone with MedCover access is the set
+# [cn=access,ou=medcover,ou=apps,...]/member/member: cn=access lists the
+# MedCover role groups (the same list as people.MEDCOVER_ROLES). Spelling the
+# groups out instead overflows slapd's 1 KB buffer for set.expand patterns,
+# and the clause then silently never matches.
 #
 # Evaluation order matters: the first rule whose target matches decides; a
 # clause ending in "by * break" hands the remaining readers to later rules.
@@ -87,6 +91,42 @@ olcAccess: to dn.regex="^crcCertificateId=[^,]+,(uid=[^,]+,ou=([^,]+),ou=units,{
   by set.expand="[$1] & ([cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=chair,ou=$2,ou=units,{{BASE_DN}}]/member)" break
   by set.expand="[cn=chair,ou=$2,ou=units,{{BASE_DN}}]/member & user" write
   by * break
+# 3o-3u: District Coordinators administer the external users like a Chair
+# administers a Místní skupina (same attributes, same privileged skip), and
+# give or take the MedCover role "external", but only to external users.
+olcAccess: to dn.regex="^uid=[^,]+,ou=external,{{BASE_RE}}$"
+  attrs=cn,givenName,sn,mail,telephoneNumber,crcMemberStatus,crcStatusChangedAt
+  by set="this & ([cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member)" break
+  by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" write
+  by * break
+olcAccess: to dn.regex="^uid=[^,]+,ou=external,{{BASE_RE}}$"
+  attrs=entry,objectClass,uid,crcMemberId
+  by set="this & ([cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member)" break
+  by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" add
+  by * break
+olcAccess: to dn.regex="^uid=[^,]+,ou=external,{{BASE_RE}}$"
+  attrs=crcMemberKind val=external
+  by set="this & ([cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member)" break
+  by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" add
+  by * break
+olcAccess: to dn.regex="^uid=[^,]+,ou=external,{{BASE_RE}}$"
+  attrs=children
+  by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" write
+  by * break
+olcAccess: to dn.exact="ou=external,{{BASE_DN}}"
+  attrs=children
+  by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" add
+  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" add
+  by * break
+olcAccess: to dn.regex="^(crcHoldingId|crcCertificateId)=[^,]+,(uid=[^,]+,ou=external,{{BASE_RE}})$"
+  attrs=entry,objectClass,crcHoldingId,crcQualificationRef,crcCertificateId,cn,crcIssuer,crcValidFrom,crcValidUntil
+  by set.expand="[$2] & ([cn=admin,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}]/member | [cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member | [cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}]/member)" break
+  by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" write
+  by * break
+olcAccess: to dn.exact="cn=external,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}"
+  attrs=member val.regex="^uid=[^,]+,ou=external,{{BASE_RE}}$"
+  by group/crcGroup/member.exact="cn=district-coordinator,ou=roles,ou=memberbase,ou=apps,{{BASE_DN}}" write
+  by * break
 olcAccess: to dn.regex="^cn=chair,ou=([^,]+),ou=units,{{BASE_RE}}$"
   attrs=entry,objectClass,cn,member
   by dn.regex="^uid=[^,]+,ou=$1,ou=units,{{BASE_RE}}$" read
@@ -97,10 +137,6 @@ olcAccess: to dn.regex="^(cn=chair|ou=requests),ou=[^,]+,ou=units,{{BASE_RE}}$"
   by * break
 olcAccess: to dn.regex="^cn=readers-[a-z]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
   attrs=entry,objectClass,cn
-  by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" add
-  by * break
-olcAccess: to dn.exact="ou=external,{{BASE_DN}}"
-  attrs=children
   by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" add
   by * break
 olcAccess: to dn.regex="^cn=readers-[a-z]+,uid=[^,]+,ou=[^,]+,ou=units,{{BASE_RE}}$"
@@ -164,15 +200,15 @@ olcAccess: to dn.regex="^uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
 # MedCover login, right after Keycloak accepted them.
 olcAccess: to dn.regex="^(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
   attrs=crcMemberStatus val=invited
-  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$1] & {{MEDCOVER_USERS}}" =rscxdz
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$1] & [cn=access,ou=medcover,ou=apps,{{BASE_DN}}]/member/member" =rscxdz
   by * break
 olcAccess: to dn.regex="^(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
   attrs=crcMemberStatus val=active
-  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$1] & {{MEDCOVER_USERS}}" =rscxda
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$1] & [cn=access,ou=medcover,ou=apps,{{BASE_DN}}]/member/member" =rscxda
   by * break
 olcAccess: to dn.regex="^(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
   attrs=crcStatusChangedAt
-  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="([$1] & {{MEDCOVER_USERS}}) + ([$1]/crcMemberStatus & [invited])" =w
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="([$1] & [cn=access,ou=medcover,ou=apps,{{BASE_DN}}]/member/member) + ([$1]/crcMemberStatus & [invited])" =w
   by * break
 olcAccess: to dn.subtree="ou=grants,{{BASE_DN}}"
   by dn.exact="cn=memberbase,ou=services,{{BASE_DN}}" write
@@ -205,18 +241,18 @@ olcAccess: to dn.regex="^uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}}$"
   by * break
 olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
   attrs=entry,objectClass,uid,crcMemberId,cn,mail,telephoneNumber,crcMemberStatus,crcMemberKind,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil
-  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$2] & {{MEDCOVER_USERS}}" read
+  by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" set.expand="[$2] & [cn=access,ou=medcover,ou=apps,{{BASE_DN}}]/member/member" read
   by * break
 # 10: MedCover users (anyone holding a MedCover role) see each other at the
 # contact level, with their qualifications, wherever they belong, whatever
-# the own-branch level; only active people are shown this way. "+" joins the
-# sets, so the result is empty unless the reader holds a MedCover role and
-# the target holds one and is active.
-# ponytail: the MedCover role groups are expanded for every reader; one
-# aggregate group of MedCover users would be cheaper at thousands of people.
+# the own-branch level; only active people are shown this way. External
+# users are shown but see no one: MedCover shows them only the people of
+# their own events. "+" joins the sets, so the result is empty unless the
+# reader holds a MedCover role and is a member, and the target holds one and
+# is active.
 olcAccess: to dn.regex="^(crcHoldingId=[^,]+,)?(uid=[^,]+,(ou=[^,]+,ou=units|ou=external),{{BASE_RE}})$"
   attrs=entry,objectClass,uid,crcMemberId,cn,givenName,sn,mail,telephoneNumber,crcMemberStatus,crcMemberKind,crcStatusChangedAt,crcHoldingId,crcQualificationRef,crcValidFrom,crcValidUntil,entryCSN
-  by set.expand="(user & {{MEDCOVER_USERS}}) + ([$2] & {{MEDCOVER_USERS}}) + ([$2]/crcMemberStatus & [active])" read
+  by set.expand="(user & [cn=access,ou=medcover,ou=apps,{{BASE_DN}}]/member/member) + (user/crcMemberKind & [member]) + ([$2] & [cn=access,ou=medcover,ou=apps,{{BASE_DN}}]/member/member) + ([$2]/crcMemberStatus & [active])" read
   by * break
 # 11-13: visibility levels between people (see the design: basic = name and
 # Místní skupina, contact = + email and phone, extended = + later attributes,
@@ -270,10 +306,10 @@ olcAccess: to dn.regex="^crcCertificateId=[^,]+,(uid=[^,]+,(ou=[^,]+,ou=units|ou
 olcAccess: to dn.subtree="ou=medcover,ou=apps,{{BASE_DN}}"
   by dn.exact="cn=medcover-sync,ou=services,{{BASE_DN}}" read
   by * break
-# MedCover users see who holds which MedCover role.
+# MedCover users (not external users) see who holds which MedCover role.
 olcAccess: to dn.regex="^cn=[^,]+,ou=roles,ou=medcover,ou=apps,{{BASE_RE}}$"
   attrs=member
-  by set="user & {{MEDCOVER_USERS}}" read
+  by set="(user & [cn=access,ou=medcover,ou=apps,{{BASE_DN}}]/member/member) + (user/crcMemberKind & [member])" read
   by * break
 olcAccess: to dn.subtree="ou=apps,{{BASE_DN}}"
   attrs=member
