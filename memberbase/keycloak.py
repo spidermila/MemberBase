@@ -13,6 +13,8 @@ from memberbase import auth
 MFA_CREDENTIAL_TYPES = {"otp", "webauthn", "webauthn-passwordless"}
 INVITE_LIFESPAN_SECONDS = 72 * 3600
 TIMEOUT = 10
+# External users are invited to MedCover, not MemberBase (the realm's client).
+MEDCOVER_CLIENT_ID = "medcover"
 
 
 class KeycloakError(Exception):
@@ -80,17 +82,13 @@ def user_id(email: str) -> str:
     return users[0]["id"]
 
 
-def send_invite(email: str, redirect_uri: str) -> None:
-    _call(
-        "PUT",
-        f"/users/{user_id(email)}/execute-actions-email",
-        params={
-            "lifespan": INVITE_LIFESPAN_SECONDS,
-            "client_id": current_app.config["OIDC_CLIENT_ID"],
-            "redirect_uri": redirect_uri,
-        },
-        json=["UPDATE_PASSWORD"],
-    )
+def send_invite(email: str, client_id: str, redirect_uri: str = "") -> None:
+    """Email the set-password link. Without `redirect_uri`, Keycloak links
+    back to the client's home page."""
+    params: dict[str, Any] = {"lifespan": INVITE_LIFESPAN_SECONDS, "client_id": client_id}
+    if redirect_uri:
+        params["redirect_uri"] = redirect_uri
+    _call("PUT", f"/users/{user_id(email)}/execute-actions-email", params=params, json=["UPDATE_PASSWORD"])
 
 
 def logout(email: str) -> None:

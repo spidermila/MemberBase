@@ -30,6 +30,9 @@ LEVELS = {"basic": "Jméno", "contact": "Jméno a kontakt", "extended": "Rozší
 CURRENT_STATUSES = ["new", "invited", "active", "inactive"]
 APPS = {"medcover": "MedCover", "memberbase": "Evidence členů"}
 ADMIN_ROLE = "memberbase:admin"
+# The only role of external users, and theirs alone: MedCover shows them just
+# the events they are assigned to.
+EXTERNAL_ROLE = "medcover:external"
 EXTERNAL_SLUG = "external"
 PRAGUE = ZoneInfo("Europe/Prague")
 
@@ -316,7 +319,9 @@ def create_person(surname: str, given_name: str, email: str, phone: str, unit: U
         },
         as_dn,
     )
-    if not unit.is_external:
+    if unit.is_external:
+        give_external_role(dn, as_dn)
+    else:
         try:
             d.add_values(unit.members_dn, "member", [dn], as_dn)
         except d.Denied:
@@ -367,21 +372,29 @@ def move_person(person: Person, target: Unit, as_dn: str | None, csn: str | None
     asynchronously, so the old branch's cn=members entry is removed before
     the rename (and put back if the rename fails). A failure after the
     rename is fixed by the nightly members repair. Chairing the old
-    Místní skupina ends with the move.
+    Místní skupina ends with the move. External users hold only the MedCover
+    role "external", so moving in or out swaps all roles for it or drops it.
     """
-    old_members = None if person.unit_dn.lower() == external_dn().lower() else f"cn=members,{person.unit_dn}"
+    from_external = person.unit_dn.lower() == external_dn().lower()
+    old_members = None if from_external else f"cn=members,{person.unit_dn}"
     if old_members:
         d.delete_values(f"cn=chair,{person.unit_dn}", "member", [person.dn], as_dn)
         d.delete_values(old_members, "member", [person.dn], as_dn)
+    # Roles too go before the rename (refint is asynchronous).
+    _, old_roles = set_roles(person, set(), as_dn) if from_external != target.is_external else (set(), set())
     try:
         new_dn = d.move(person.dn, target.dn, as_dn, csn=csn)
-    except d.StaleEntry:
+    except Exception:
         if old_members:
             d.add_values(old_members, "member", [person.dn], as_dn)
+        if old_roles:
+            set_roles(person, old_roles, as_dn)
         raise
     d.modify(new_dn, {"crcMemberKind": [target.member_kind]}, as_dn)
     if not target.is_external:
         d.add_values(target.members_dn, "member", [new_dn], as_dn)
+    if target.is_external and not from_external:
+        give_external_role(new_dn, as_dn)
 
 
 # ── App roles ────────────────────────────────────────────────────────────────
@@ -400,6 +413,19 @@ class Role:
         return f"{self.app}:{self.name}"
 
 
+def external_role_dn() -> str:
+    return f"cn=external,ou=roles,ou=medcover,ou=apps,{d.base_dn()}"
+
+
+def give_external_role(person_dn: str, as_dn: str | None) -> None:
+    d.add_values(external_role_dn(), "member", [person_dn], as_dn)
+
+
+def assignable(person: Person, role_key: str) -> bool:
+    """External users hold only the MedCover role "external", and only they hold it."""
+    return (role_key == EXTERNAL_ROLE) == (person.kind == "external")
+
+
 def list_roles(as_dn: str | None, with_members: bool = False, apps: tuple[str, ...] = tuple(APPS)) -> list[Role]:
     roles = []
     for app in apps:
@@ -413,8 +439,8 @@ def list_roles(as_dn: str | None, with_members: bool = False, apps: tuple[str, .
 
 
 # Holding any of these gives access to MedCover and the MedCover grant. The
-# directory's access rules use the same list (entrypoint.sh, MEDCOVER_USERS).
-MEDCOVER_ROLES = ("admin", "coordinator", "member", "viewer", "debriefing-manager")
+# directory's access rules use the same list (cn=access,ou=medcover,ou=apps).
+MEDCOVER_ROLES = ("admin", "coordinator", "member", "viewer", "debriefing-manager", "external")
 
 
 def has_medcover_access(role_keys: set[str]) -> bool:
@@ -441,11 +467,11 @@ def memberships(person_dn: str) -> tuple[set[str], set[str]]:
     return roles, chairs
 
 
-def set_roles(person: Person, wanted: set[str], as_dn: str) -> tuple[set[str], set[str]]:
+def set_roles(person: Person, wanted: set[str], as_dn: str | None) -> tuple[set[str], set[str]]:
     listed = list_roles(as_dn, with_members=True)
     roles = {r.key: r for r in listed}
     current = role_keys(person, listed)
-    wanted &= set(roles)
+    wanted = {key for key in wanted & set(roles) if assignable(person, key)}
     for key in wanted - current:
         d.add_values(roles[key].dn, "member", [person.dn], as_dn)
     for key in current - wanted:

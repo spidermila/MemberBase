@@ -435,19 +435,6 @@ def test_every_request_type_on_the_new_page_has_a_permission():
     assert set(requests_view.NEW_TYPES) == set(REQUEST_PERMISSIONS) <= set(approvals.TYPES)
 
 
-def test_external_coordinator_is_not_offered_requests(client, world, admin):
-    dc = world.person(world.external(), "Erik Vnější", roles=["memberbase:district-coordinator"])
-    login(client, dc)
-    assert "/requests/" not in text(client.get("/"))
-    assert client.get("/requests/new").status_code == 403
-    assert client.get("/requests/certificates").status_code == 403
-    ext_admin = world.person(world.external(), "Ema Vnější", roles=["memberbase:admin"])
-    login(client, ext_admin)
-    page = text(client.get("/requests/"))
-    assert "Čekají na vaše rozhodnutí" in page and "+ Nová žádost" not in page
-    assert client.get("/requests/access").status_code == 403
-
-
 def test_announcements_say_what_is_asked(client, monkeypatch, coordinator, helper, cast, units):
     bodies: list[str] = []
     monkeypatch.setattr(mail, "send", lambda to, subject, body: bodies.append(body) or True)

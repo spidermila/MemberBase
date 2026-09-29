@@ -77,6 +77,24 @@ objectClass: crcGroup
 cn: debriefing-manager
 description: Debriefing Manager
 
+dn: cn=external,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+objectClass: crcGroup
+cn: external
+description: External
+
+# Holders of these roles have MedCover access (the access rules read
+# cn=access/member/member; same list as people.MEDCOVER_ROLES).
+dn: cn=access,ou=medcover,ou=apps,{{BASE_DN}}
+objectClass: crcGroup
+cn: access
+description: MedCover access
+member: cn=admin,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+member: cn=coordinator,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+member: cn=member,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+member: cn=viewer,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+member: cn=debriefing-manager,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+member: cn=external,ou=roles,ou=medcover,ou=apps,{{BASE_DN}}
+
 dn: ou=qualifications,ou=medcover,ou=apps,{{BASE_DN}}
 objectClass: organizationalUnit
 ou: qualifications

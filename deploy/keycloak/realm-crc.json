@@ -92,6 +92,9 @@
         },
         {
           "name": "debriefing-manager"
+        },
+        {
+          "name": "external"
         }
       ]
     }

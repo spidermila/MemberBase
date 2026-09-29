@@ -33,8 +33,13 @@ UI is Czech („Evidence členů“); code and docs are English.
   branch or of one person (a person, or a branch's `cn=members` group).
   MedCover access is a fixed grant: anyone holding a MedCover role reads
   every other holder at the `contact` level, with their MedCover
-  qualifications and roles. District Coordinators read everything, Admins change everything, MS Chairs
-  (`cn=chair` of a branch) change the people of their own branch.
+  qualifications and roles; external users are shown this way but read no
+  one. District Coordinators read everything, Admins change everything, MS Chairs
+  (`cn=chair` of a branch) change the people of their own branch, and
+  District Coordinators change the external users.
+- External users hold only the MedCover role `external` (given
+  automatically) and cannot log in to MemberBase; their invitation leads to
+  MedCover.
 - Certificates („Osvědčení“) are `crcCertificate` entries under the person.
   Only the person, their Chairs, District Coordinators, Admins and holders of
   a `records` grant read them; the rest of the branch does not.

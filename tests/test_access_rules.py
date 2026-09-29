@@ -706,7 +706,8 @@ def test_medcover_users_see_each_other_everywhere(setup, admin):
     people.set_holdings(bob, {qual.id}, admin.dn)
 
     assert level(bob, alice.dn) == "contact" and level(alice, bob.dn) == "contact"
-    assert level(ext, alice.dn) == "contact" and level(alice, ext.dn) == "contact"
+    # External users are shown but see no one.
+    assert level(ext, alice.dn) == "contact" and level(alice, ext.dn) == "none"
     assert people.holdings_of(bob, alice.dn) != {}
     # Their MedCover roles, not other apps' roles.
     roles = {r.key: r.members for r in people.list_roles(alice.dn, with_members=True)}
@@ -718,6 +719,7 @@ def test_medcover_users_see_each_other_everywhere(setup, admin):
 
 def test_medcover_users_do_not_see_people_without_medcover_access(setup, admin):
     alice, bob, ext = setup["alice"], setup["bob"], setup["ext"]
+    people.toggle_role(ext, _role(people.EXTERNAL_ROLE, admin.dn), False, admin.dn)
     _give_role(alice, "medcover:coordinator", admin.dn)
     _give_role(bob, "memberbase:district-coordinator", admin.dn)  # a role, but not MedCover's
     assert level(bob, alice.dn) == "none" and level(ext, alice.dn) == "none"
@@ -814,5 +816,119 @@ def test_medcover_sync_still_reads_the_status_of_medcover_users(setup, world, ad
         for person, status in ((setup["alice"], "active"), (invited, "invited")):
             found = conn.search_s(person.dn, ldap.SCOPE_BASE, f"(crcMemberStatus={status})", ["crcMemberStatus"])
             assert found == [(person.dn, {"crcMemberStatus": [status.encode()]})]
+    finally:
+        conn.unbind_s()
+
+
+# ── External users: managed by District Coordinators, MedCover role "external" ──
+
+
+@pytest.fixture
+def dc(setup, world):
+    return world.person(setup["home"], "Dana Koordinátorka", roles=["memberbase:district-coordinator"])
+
+
+def _role(key: str, as_dn: str) -> people.Role:
+    return next(r for r in people.list_roles(as_dn) if r.key == key)
+
+
+def test_new_external_user_holds_the_external_role(setup, admin):
+    assert people.memberships(setup["ext"].dn)[0] == {people.EXTERNAL_ROLE}
+    assert people.has_medcover_access({people.EXTERNAL_ROLE})
+
+
+def test_district_coordinator_edits_external_users_only(setup, dc):
+    ext = setup["ext"]
+    d.modify(ext.dn, {"cn": ["Externí Eva"], "mail": [f"n-{dc.id}@example.org"]}, dc.dn)
+    people.set_status(ext, "inactive", dc.dn)
+    with pytest.raises(d.Denied):
+        d.modify(setup["bob"].dn, {"cn": ["Změna"]}, dc.dn)
+    with pytest.raises(d.Denied):
+        d.modify(ext.dn, {"crcMemberKind": ["member"]}, dc.dn)
+
+
+def test_district_coordinator_creates_external_users_only(setup, dc):
+    ext = people.create_person("Host", "Nový", f"h-{dc.id}@example.org", "", setup["ext"].unit, dc.dn)
+    assert ext.kind == "external"
+    assert people.memberships(ext.dn)[0] == {people.EXTERNAL_ROLE}
+    with pytest.raises(d.Denied):
+        people.create_person("Člen", "Nový", f"c-{dc.id}@example.org", "", setup["home"], dc.dn)
+    dn, attrs = _person_attrs(setup["ext"].unit, dc, crcMemberKind=["member"])
+    with pytest.raises(d.Denied):
+        d.add(dn, attrs, dc.dn)
+    dn, attrs = _person_attrs(setup["ext"].unit, dc, crcMemberKind=["external"], userPassword=["heslo-123"])
+    with pytest.raises(d.Denied):
+        d.add(dn, attrs, dc.dn)
+
+
+def test_district_coordinator_cannot_delete_move_or_edit_privileged_external_users(setup, world, admin, dc):
+    ext = setup["ext"]
+    with pytest.raises(d.Denied):
+        d.delete(ext.dn, dc.dn)
+    with pytest.raises(d.Denied):
+        d.move(ext.dn, setup["home"].dn, dc.dn)
+    boss = world.person(world.external(), "Olga Oprávněná", roles=["medcover:coordinator"])
+    with pytest.raises(d.Denied):
+        d.modify(boss.dn, {"mail": ["x@example.org"]}, dc.dn)
+    for attr, value in (("objectClass", "organizationalPerson"), ("uid", "druhe-uid")):
+        with pytest.raises(d.Denied):
+            d.add_values(boss.dn, attr, [value], dc.dn)
+    d.add_values(ext.dn, "uid", ["druhe-uid"], dc.dn)  # not privileged: allowed like for a Chair
+    people.save_qualification(None, f"Kval E {dc.id}", "", [], False, admin.dn)
+    qual = next(q for q in people.list_qualifications(admin.dn) if q.name == f"Kval E {dc.id}")
+    with pytest.raises(d.Denied):
+        people.set_holdings(boss, {qual.id}, dc.dn)
+    with pytest.raises(d.Denied):
+        _cert(boss, dc.dn)
+
+
+def test_district_coordinator_manages_holdings_and_certificates_of_external_users_only(setup, admin, dc):
+    ext, bob = setup["ext"], setup["bob"]
+    people.save_qualification(None, f"Kval D {dc.id}", "", [], True, admin.dn)
+    qual = next(q for q in people.list_qualifications(admin.dn) if q.name == f"Kval D {dc.id}")
+    people.set_holdings(ext, {qual.id}, dc.dn)
+    assert people.holdings_of(ext, dc.dn)
+    people.set_holdings(ext, set(), dc.dn)
+    assert not people.holdings_of(ext, dc.dn)
+    _cert(ext, dc.dn)
+    people.delete_certificate(people.certificates_of(ext, dc.dn)[0], dc.dn)
+    with pytest.raises(d.Denied):
+        people.set_holdings(bob, {qual.id}, dc.dn)
+    with pytest.raises(d.Denied):
+        _cert(bob, dc.dn)
+
+
+def test_district_coordinator_gives_the_external_role_to_external_users_only(setup, admin, dc):
+    ext, alice = setup["ext"], setup["alice"]
+    external = _role(people.EXTERNAL_ROLE, admin.dn)
+    people.toggle_role(ext, external, False, dc.dn)
+    people.toggle_role(ext, external, True, dc.dn)
+    with pytest.raises(d.Denied):
+        people.toggle_role(alice, external, True, dc.dn)
+    with pytest.raises(d.Denied):
+        people.toggle_role(ext, _role("medcover:member", admin.dn), True, dc.dn)
+    with pytest.raises(d.Denied):
+        people.toggle_role(ext, external, True, alice.dn)  # nor anyone else
+
+
+def test_external_users_see_no_one_through_medcover(setup, world, admin):
+    alice, ext = setup["alice"], setup["ext"]
+    other_ext = world.person(world.external(), "Ema Externí")
+    _give_role(alice, "medcover:member", admin.dn)
+    assert level(ext, alice.dn) == "contact"  # members see them
+    assert level(alice, ext.dn) == "none"
+    assert level(other_ext, ext.dn) == "none"
+    assert people.holdings_of(alice, ext.dn) == {}
+    roles = {r.key: r.members for r in people.list_roles(ext.dn, with_members=True)}
+    assert roles["medcover:member"] == set() and roles[people.EXTERNAL_ROLE] == set()
+
+
+def test_sync_account_reads_external_users_with_the_external_role(setup, admin):
+    conn = service_conn("medcover-sync", os.environ["TEST_SYNC_PASSWORD"])
+    try:
+        assert conn.search_s(setup["ext"].dn, ldap.SCOPE_BASE, attrlist=["mail"])
+        people.toggle_role(setup["ext"], _role(people.EXTERNAL_ROLE, admin.dn), False, admin.dn)
+        with pytest.raises(ldap.NO_SUCH_OBJECT):
+            conn.search_s(setup["ext"].dn, ldap.SCOPE_BASE, attrlist=["mail"])
     finally:
         conn.unbind_s()

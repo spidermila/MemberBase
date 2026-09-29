@@ -4,7 +4,8 @@ access rules enforce the same split independently.
 
 The MS Chair is not an app role but membership of cn=chair of a Místní
 skupina; CHAIR_UNIT_PERMISSIONS apply only to the people of that Místní
-skupina."""
+skupina. "external.manage" gives the same CHAIR_UNIT_PERMISSIONS for the
+external users."""
 
 ADMIN = "admin"
 DISTRICT_COORDINATOR = "district-coordinator"
@@ -16,6 +17,7 @@ PERMISSION_LABELS = {
     "member.view_all": "Vidí všechny místní skupiny a externí uživatele",
     "member.edit": "Upravuje osoby, vytváří je a zve",
     "member.status": "Aktivuje, deaktivuje, archivuje a obnovuje osoby",
+    "external.manage": "Spravuje externí uživatele",
     "member.move": "Přesouvá osoby mezi místními skupinami",
     "role.assign": "Přiřazuje role aplikací",
     "mfa.reset": "Resetuje dvoufázové ověření",
@@ -30,7 +32,7 @@ PERMISSION_LABELS = {
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     ADMIN: set(PERMISSION_LABELS),
-    DISTRICT_COORDINATOR: {"member.view_all", "request.certificates"},
+    DISTRICT_COORDINATOR: {"member.view_all", "external.manage", "request.certificates"},
     CHAIR: {"request.create"},
 }
 # Request type → the permission to file it on the „Nová žádost“ page.

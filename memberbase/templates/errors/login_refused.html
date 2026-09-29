@@ -2,6 +2,10 @@
 {% block title %}Přihlášení odmítnuto – Evidence členů{% endblock %}
 {% block content %}
 <h2>Přihlášení odmítnuto</h2>
+{% if external %}
+<p>Externí uživatelé Evidenci členů nepoužívají. Přihlaste se do aplikace MedCover stejným e-mailem a heslem.</p>
+{% else %}
 <p>Váš účet v Evidenci členů není aktivní. Obraťte se na správce oblastního spolku.</p>
+{% endif %}
 <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-secondary">Odhlásit se</a>
 {% endblock %}

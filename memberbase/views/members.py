@@ -17,6 +17,9 @@ INVITABLE = {"new", "invited"}
 STALE = "Záznam mezitím změnil někdo jiný. Zkontrolujte údaje a akci opakujte."
 EMAIL_TAKEN = "Tento e-mail už používá jiná osoba."
 KEYCLOAK_FAILED = "Změna je uložena, ale přihlašovací služba neodpověděla: {}. Zkuste to prosím znovu."
+SELF_EXTERNAL = (
+    "Sami sebe mezi externí uživatele přesunout nemůžete: externí uživatelé se do Evidence členů nepřihlašují."
+)
 PRIVILEGED = "Tuto osobu smí měnit jen Admin: má roli s rozšířeným oprávněním nebo je předsedou místní skupiny."
 
 # action → (allowed from, new status, flash message)
@@ -50,8 +53,9 @@ def _clean_person(form: Mapping[str, str]) -> tuple[dict[str, str], list[str]]:
 
 
 def _protected(person: people.Person) -> bool:
-    """Chairs are not offered what the directory refuses them (privileged people, themselves)."""
-    return me().is_chair_of(person.unit_dn) and not me().is_admin and people.is_privileged(person)
+    """Chairs (and District Coordinators over external users) are not offered
+    what the directory refuses them (privileged people, themselves)."""
+    return me().manages_unit(person.unit_dn) and not me().is_admin and people.is_privileged(person)
 
 
 def _managed_or_403(member_id: str, permission: str) -> people.Person:
@@ -139,8 +143,9 @@ def detail(member_id: str) -> str:
         "is_chair": people.is_chair(person, me().dn),
     }
     if me().can("role.assign"):
-        ctx["roles"] = people.list_roles(me().dn, with_members=True)
-        person.roles = people.role_keys(person, ctx["roles"])
+        listed = people.list_roles(me().dn, with_members=True)
+        person.roles = people.role_keys(person, listed)
+        ctx["roles"] = [r for r in listed if people.assignable(person, r.key)]
     elif me().role_apps:
         readable = people.list_roles(me().dn, with_members=True, apps=me().role_apps)
         ctx["held_roles"] = [r for r in readable if r.key in people.role_keys(person, readable)]
@@ -213,6 +218,8 @@ def change_status(member_id: str, action: str) -> Response:
     if status == "former" and me().can("role.assign"):
         # A Chair may not change roles; the nightly members job removes them.
         people.remove_all_roles(person, me().dn)
+    if action == "restore" and person.kind == "external":
+        people.give_external_role(person.dn, me().dn)  # archiving took it away
     flash(message, "success")
     if person.status in {"active", "invited"} and status in {"inactive", "former"}:
         try:
@@ -229,6 +236,9 @@ def move(member_id: str) -> Response:
     target = people.get_unit(request.form.get("unit", ""), me().dn)
     if target is None or target.dn == person.unit_dn:
         flash("Vyberte jinou místní skupinu.", "warning")
+        return _back(person)
+    if target.is_external and person.id == me().person.id:
+        flash(SELF_EXTERNAL, "warning")
         return _back(person)
     try:
         people.move_person(person, target, me().dn, request.form.get("csn", ""))
@@ -376,7 +386,12 @@ def _invite(person: people.Person) -> str | None:
     if was_new:
         people.set_status(person, "invited", me().dn)
     try:
-        keycloak.send_invite(person.email, url_for("main.index", _external=True))
+        if person.kind == "external":
+            keycloak.send_invite(person.email, keycloak.MEDCOVER_CLIENT_ID)
+        else:
+            keycloak.send_invite(
+                person.email, current_app.config["OIDC_CLIENT_ID"], url_for("main.index", _external=True)
+            )
     except keycloak.KeycloakError as exc:
         if was_new:
             people.set_status(person, "new", me().dn)
@@ -469,7 +484,7 @@ def batch() -> Response:
         return redirect(url_for("members.index"))
     changed = 0
     for person in people.search_people(me().dn, ids=ids):
-        if action == "add" and person.status == "former":
+        if action == "add" and (person.status == "former" or not people.assignable(person, role.key)):
             continue
         if (person.dn.lower() in role.members) == (action == "remove"):
             people.toggle_role(person, role, action == "add", me().dn)
@@ -490,6 +505,9 @@ def batch_move() -> Response:
     moved, stale = 0, 0
     for person in people.search_people(me().dn, ids=ids):
         if person.unit_dn.lower() == target.dn.lower():
+            continue
+        if target.is_external and person.id == me().person.id:
+            flash(SELF_EXTERNAL, "warning")
             continue
         try:
             people.move_person(person, target, me().dn, person.csn)
