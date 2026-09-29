@@ -36,11 +36,12 @@
   <div class="col-lg-6">
     <div class="card">
       <div class="card-header">Zabezpečení účtu</div>
-      <div class="list-group list-group-flush">
-        <a class="list-group-item list-group-item-action" href="{{ url_for('auth.login', kc_action='UPDATE_PASSWORD', next=url_for('main.profile')) }}">Změnit heslo</a>
-        <a class="list-group-item list-group-item-action" href="{{ url_for('auth.login', kc_action='CONFIGURE_TOTP', next=url_for('main.profile')) }}">Nastavit ověřovací aplikaci (Google / Microsoft Authenticator)</a>
-        <a class="list-group-item list-group-item-action" href="{{ url_for('auth.login', kc_action='webauthn-register-passwordless', next=url_for('main.profile')) }}">Přidat přístupový klíč (Touch ID, Windows Hello, telefon)</a>
-        <a class="list-group-item list-group-item-action" href="{{ url_for('auth.login', kc_action='webauthn-register', next=url_for('main.profile')) }}">Přidat bezpečnostní klíč jako druhý faktor</a>
+      <div class="card-body d-grid gap-2">
+        <a class="btn btn-outline-secondary text-start" href="{{ url_for('auth.login', kc_action='UPDATE_PASSWORD', next=url_for('main.profile')) }}">Změnit heslo</a>
+        <a class="btn btn-outline-secondary text-start" href="{{ url_for('auth.login', kc_action='CONFIGURE_TOTP', next=url_for('main.profile')) }}">Nastavit ověřovací aplikaci (Google / Microsoft Authenticator)</a>
+        <a class="btn btn-outline-secondary text-start" href="{{ url_for('auth.login', kc_action='webauthn-register-passwordless', next=url_for('main.profile')) }}">Přidat přístupový klíč (Touch ID, Windows Hello, telefon)</a>
+        <a class="btn btn-outline-secondary text-start" href="{{ url_for('auth.login', kc_action='webauthn-register', next=url_for('main.profile')) }}">Přidat bezpečnostní klíč jako druhý faktor</a>
+        <a class="btn btn-outline-secondary text-start" href="{{ account_url }}">Spravovat přihlašovací zařízení a relace (odebrání ověřovací aplikace nebo klíče, odhlášení jinde)</a>
       </div>
     </div>
   </div>

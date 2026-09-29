@@ -1,4 +1,4 @@
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from werkzeug.wrappers import Response
 
 from memberbase import auth, forms, people
@@ -42,6 +42,9 @@ def profile() -> str | Response:
         certs=people.certificates_of(person, me().dn),
         roles=roles,
         kc=auth.KC_ACTIONS,
+        # Keycloak's account console lists and removes second factors and sessions.
+        account_url=f"{auth.public_keycloak_url()}/realms/{current_app.config['KEYCLOAK_REALM']}"
+        "/account/account-security/signing-in",
     )
 
 
