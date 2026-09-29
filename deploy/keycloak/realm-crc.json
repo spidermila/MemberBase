@@ -52,11 +52,86 @@
   "roles": {
     "realm": [
       {
+        "name": "offline_access",
+        "description": "${role_offline-access}"
+      },
+      {
+        "name": "uma_authorization",
+        "description": "${role_uma_authorization}"
+      },
+      {
+        "name": "default-roles-crc",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "offline_access",
+            "uma_authorization"
+          ],
+          "client": {
+            "account": [
+              "view-profile",
+              "manage-account"
+            ]
+          }
+        }
+      },
+      {
         "name": "mfa-required",
         "description": "Second factor is mandatory (composite of admin roles)"
       }
     ],
     "client": {
+      "account": [
+        {
+          "name": "delete-account",
+          "description": "${role_delete-account}"
+        },
+        {
+          "name": "manage-account",
+          "description": "${role_manage-account}",
+          "composite": true,
+          "composites": {
+            "client": {
+              "account": [
+                "manage-account-links"
+              ]
+            }
+          }
+        },
+        {
+          "name": "manage-account-links",
+          "description": "${role_manage-account-links}"
+        },
+        {
+          "name": "manage-consent",
+          "description": "${role_manage-consent}",
+          "composite": true,
+          "composites": {
+            "client": {
+              "account": [
+                "view-consent"
+              ]
+            }
+          }
+        },
+        {
+          "name": "view-applications",
+          "description": "${role_view-applications}"
+        },
+        {
+          "name": "view-consent",
+          "description": "${role_view-consent}"
+        },
+        {
+          "name": "view-groups",
+          "description": "${role_view-groups}"
+        },
+        {
+          "name": "view-profile",
+          "description": "${role_view-profile}"
+        }
+      ],
       "memberbase": [
         {
           "name": "admin",
@@ -98,6 +173,23 @@
         }
       ]
     }
+  },
+  "defaultRole": {
+    "name": "default-roles-crc",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false
+  },
+  "clientScopeMappings": {
+    "account": [
+      {
+        "client": "account-console",
+        "roles": [
+          "manage-account",
+          "view-groups"
+        ]
+      }
+    ]
   },
   "clientScopes": [
     {
@@ -254,6 +346,74 @@
         "crc-member-id",
         "medcover-roles"
       ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "account",
+      "name": "${client_account}",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "frontchannelLogout": false,
+      "rootUrl": "${authBaseUrl}",
+      "baseUrl": "/realms/crc/account/",
+      "redirectUris": [
+        "/realms/crc/account/*"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "+"
+      },
+      "fullScopeAllowed": false,
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "account-console",
+      "name": "${client_account-console}",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "frontchannelLogout": false,
+      "rootUrl": "${authBaseUrl}",
+      "baseUrl": "/realms/crc/account/",
+      "redirectUris": [
+        "/realms/crc/account/*"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "audience resolve",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-resolve-mapper",
+          "config": {}
+        },
+        {
+          "name": "account roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "usermodel.clientRoleMapping.clientId": "account",
+            "claim.name": "resource_access.${client_id}.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": [],
       "optionalClientScopes": []
     }
   ],
