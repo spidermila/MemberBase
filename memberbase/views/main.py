@@ -49,5 +49,6 @@ def profile() -> str | Response:
 
 
 @bp.route("/changelog")
+@login_required
 def changelog() -> str:
     return render_template("main/changelog.html")
