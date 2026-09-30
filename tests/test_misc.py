@@ -39,7 +39,10 @@ def test_profile_phone_update(client, world):
     assert "Údaje se mezitím změnily." in text(stale)
 
 
-def test_changelog_is_public(client):
+def test_changelog_needs_login(client, admin):
+    assert client.get("/changelog").headers["Location"].startswith("/login")
+    assert "Změny ve verzích" not in text(client.get("/"))
+    login(client, admin)
     assert "Chystané změny" in text(client.get("/changelog"))
 
 
