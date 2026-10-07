@@ -234,17 +234,18 @@ repository pins the new version and deploys it.
 
 ## Versioning & Changelog
 
-Releases are tagged `vX.Y.Z` on `main`. Every user-visible change goes into
-both changelogs in the same PR: `CHANGELOG.md` (English, developer) and
-`memberbase/templates/main/changelog.html` (Czech, users). A release renames
-`[Unreleased]` in both.
+Releases are tagged `vX.Y.Z` on `main`. Both changelogs, `CHANGELOG.md`
+(English, developer) and `memberbase/templates/main/changelog.html` (Czech,
+users), are generated from the Conventional Commits messages when a release is
+cut. Feature PRs do not edit them and add no changelog fragments; the commit
+message is the changelog input.
 
 ### Changing the contract
 
 When a change touches [the contract](#the-contract-between-memberbase-and-medcover):
 
 1. Change MemberBase in a backward-compatible way (add before you remove),
-   release it, and note under `### Changed` which MedCover version needs it.
+   release it, and say in the commit message which MedCover version needs it.
 2. Update MedCover to the new contract and bump its pinned MemberBase version.
 3. Deploy MemberBase first, then MedCover.
 4. Remove the old form in a later MemberBase release.
