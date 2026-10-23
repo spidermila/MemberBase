@@ -718,7 +718,7 @@ AD numbering in this document is independent of the original design document. Al
 | Options | **Option 1: Full members of a pseudo-unit with MemberBase login.** Pros: uniform. Cons: they see a member directory they do not need. <br> **Option 2: Own branch, no MemberBase login, MedCover role for external users only.** Pros: need-to-know. Cons: special cases in rules and UI. |
 | Decision | Option 2. |
 | Justification | P-03, FR-06. |
-| Implications | Invitations for external users lead to MedCover. |
+| Implications | Invitations for external users lead to MedCover. The MedCover role `external` excludes all other MedCover roles only; an external user may also hold roles in MemberBase and other apps. MedCover roles come only from the MedCover role groups; `crcMemberKind` is informational in MedCover. If a token carries `external` with other MedCover roles, MedCover keeps `external` only. |
 | Derived requirements | – |
 | Related decisions | AD-05, AD-11 |
 

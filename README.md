@@ -37,9 +37,16 @@ UI is Czech („Evidence členů“); code and docs are English.
   one. District Coordinators read everything, Admins change everything, MS Chairs
   (`cn=chair` of a branch) change the people of their own branch, and
   District Coordinators change the external users.
-- External users hold only the MedCover role `external` (given
-  automatically) and cannot log in to MemberBase; their invitation leads to
-  MedCover.
+- External users (`crcMemberKind=external`) get the MedCover role `external`
+  automatically, cannot log in to MemberBase, and their invitation leads to
+  MedCover. The `external` role is exclusive only among MedCover roles: a
+  person holds MedCover `external` or any combination of the other MedCover
+  roles, never both. An external user may also hold roles in MemberBase and
+  in other apps that use MemberBase for RBAC (e.g. CrossCentral). MedCover
+  roles come only from the MedCover role groups; `crcMemberKind` is
+  informational in MedCover and does not change them. If a token carries
+  `external` together with other MedCover roles, MedCover keeps `external`
+  only.
 - Certificates („Osvědčení“) are `crcCertificate` entries under the person.
   Only the person, their Chairs, District Coordinators, Admins and holders of
   a `records` grant read them; the rest of the branch does not.
