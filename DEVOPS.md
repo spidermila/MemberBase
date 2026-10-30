@@ -2,7 +2,7 @@
 
 This document covers how MemberBase is developed, tested, run together with
 MedCover, and deployed. MedCover's side of the same process is in
-[MedCover's `DEVOPS.md`](https://github.com/spidermila/MedCover/blob/main/DEVOPS.md).
+[MedCover's `DEVOPS.md`](https://github.com/CzechRedCrossFM/MedCover/blob/main/DEVOPS.md).
 Code layout and configuration variables are in `README.md`.
 
 ---
@@ -184,7 +184,7 @@ back-channel logout, Playwright E2E) live in MedCover. They run against
 
 ## Images
 
-This repository publishes three images to `ghcr.io/spidermila/`:
+This repository publishes three images to `ghcr.io/czechredcrossfm/`:
 
 | Image | Built from | Runs as |
 |---|---|---|
